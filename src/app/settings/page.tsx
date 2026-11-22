@@ -83,14 +83,14 @@ export default function SettingsPage() {
     }
   }
 
-  const environmentExample = `NEXT_PUBLIC_SUPABASE_URL=…
-NEXT_PUBLIC_SUPABASE_ANON_KEY=…
-SUPABASE_SERVICE_ROLE_KEY=…
+  const environmentExample = `NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...
 NEXT_PUBLIC_APP_URL=https://YOUR-VERCEL-DOMAIN
-GOOGLE_CLIENT_ID=…
-GOOGLE_CLIENT_SECRET=…
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=https://YOUR-VERCEL-DOMAIN/api/drive/callback
-TOKEN_ENCRYPTION_KEY=…`;
+TOKEN_ENCRYPTION_KEY=...`;
 
   return (
     <div className="page-wrap">
@@ -101,7 +101,7 @@ TOKEN_ENCRYPTION_KEY=…`;
           <h3>Google Drive storage</h3>
           <p>Primary home for generated clips, uploaded media and final video exports. Supabase stores file references and metadata.</p>
           {drive ? <>
-            <span className="pill green">Connected{drive.account_label ? ` · ${drive.account_label}` : ""}</span>
+            <span className="pill green">Connected{drive.account_label ? ` Â· ${drive.account_label}` : ""}</span>
             <div style={{ display: "flex", gap: 8, marginTop: 13 }}>
               <button className="secondary-btn" onClick={() => void load()} disabled={busy}><RefreshCw size={13} />Refresh</button>
               <button className="danger-btn" onClick={() => void disconnectDrive()} disabled={busy}>Disconnect</button>
@@ -118,7 +118,7 @@ TOKEN_ENCRYPTION_KEY=…`;
           <div className="setting-icon"><Cloud size={18} /></div>
           <h3>Kaggle & Colab workers</h3>
           <p>Start either notebook when you want to process queued shots. Workers claim jobs, save finished clips to Drive and report progress.</p>
-          <button className="secondary-btn" onClick={() => void createToken()} disabled={busy}><KeyRound size={13} />{busy ? "Working…" : "Create notebook token"}</button>
+          <button className="secondary-btn" onClick={() => void createToken()} disabled={busy}><KeyRound size={13} />{busy ? "Workingâ€¦" : "Create notebook token"}</button>
           {token && <div style={{ marginTop: 12 }}>
             <div className="notice">Copy this token now. It is displayed only once. Enter it at notebook runtime; never commit it to GitHub.</div>
             <div style={{ display: "flex", gap: 7, marginTop: 8 }}><input className="field" readOnly value={token} /><button className="icon-button" onClick={() => void copyToken()} aria-label="Copy worker token">{copied ? <Check size={14} /> : <Copy size={14} />}</button></div>

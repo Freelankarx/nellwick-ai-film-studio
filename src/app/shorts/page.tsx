@@ -1,0 +1,2 @@
+import { ComingSoon } from "@/components/ui";
+export default function ShortsPage(){return <ComingSoon title="Shorts studio" description="Create vertical edits from your finished episodes and long-form projects without damaging the original master." items={["Find candidate moments from episode transcripts","9:16 reframing and safe-area preview","Dedicated vertical shot generation when cropping is unsuitable","Captions, hooks and end cards","Batch export of Shorts and teasers"]}/>}

@@ -1,0 +1,2 @@
+import { ComingSoon } from "@/components/ui";
+export default function AudioPage(){return <ComingSoon title="Voice & audio studio" description="Manage voice profiles, narration, dialogue, sound effects and music separately from picture generation." items={["Kokoro-82M narration adapter for the first voice test","Reusable voice profiles and pronunciation notes","Uploaded dialogue and licensed music library","Audio timeline and loudness controls","Voice consent and usage records"]}/>}

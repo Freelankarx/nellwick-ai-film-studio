@@ -1,0 +1,2 @@
+import { ComingSoon } from "@/components/ui";
+export default function EditorPage(){return <ComingSoon title="Film editor" description="Assemble approved clips into complete videos using a timeline-first workflow and a deterministic FFmpeg render pipeline." items={["Scene and shot ordering","Voiceover, dialogue, ambience and music tracks","Transitions, titles, credits and subtitles","Audio normalisation and final loudness checks","16:9 episode and 9:16 export presets"]}/>}

@@ -1,0 +1,7 @@
+diffusers>=0.35,<0.40
+transformers>=4.51,<5
+accelerate
+safetensors
+sentencepiece
+imageio-ffmpeg
+requests

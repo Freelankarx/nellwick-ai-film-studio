@@ -1,0 +1,2 @@
+import { ComingSoon } from "@/components/ui";
+export default function DirectorPage(){return <ComingSoon title="AI Film Director" description="Turn an idea into a screenplay, scene breakdown, shot manifest and production-ready prompts. The first iteration will support editable, model-independent manifests." items={["Concept and logline development","Screenplay and dialogue editor","Scene-by-scene breakdown","Shot prompts with camera, action, mood and duration","Human approval before expensive GPU work","Export/import portable production manifests"]}/>}

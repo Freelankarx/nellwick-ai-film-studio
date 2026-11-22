@@ -1,0 +1,2 @@
+import { ComingSoon } from "@/components/ui";
+export default function StoryboardsPage(){return <ComingSoon title="Storyboard studio" description="Review visual coverage before generating video. Approve, revise or regenerate individual shot references." items={["Shot cards with camera framing and movement","Character and location reference attachments","16:9 and 9:16 composition checks","Continuity and scene coverage review","Approved storyboard locked into the production manifest"]}/>}

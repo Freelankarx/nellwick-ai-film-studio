@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "policy": "Model availability is not the same as free-GPU compatibility. Run the hardware preflight and benchmark before enabling a model for production.",
+  "models": [
+    {
+      "id": "qwen3-4b-story-planner",
+      "name": "Qwen3 4B Instruct",
+      "task": "script_and_story_planning",
+      "repository": "Qwen/Qwen3-4B",
+      "license": "Apache-2.0",
+      "status": "planned_local_story_planner_candidate",
+      "context_length_tokens": 32768,
+      "reference_quantized_memory_gb": 2.9,
+      "caveat": "Qwen3 requires Transformers 4.51 or newer. The Qwen team reports about 2.9 GB GPU memory for one AWQ-INT4 benchmark configuration; do not treat that as a universal runtime guarantee. bitsandbytes NF4 is documented for NVIDIA Pascal P100 and Turing T4, but adapter integration and notebook tests are still required. Unload the text model before video inference to free GPU memory."
+    },
+    {
+      "id": "wan21-t2v-1.3b",
+      "name": "Wan 2.1 T2V 1.3B",
+      "task": "text_to_video",
+      "repository": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+      "license": "Apache-2.0",
+      "status": "enabled_for_first_worker_test",
+      "reference_resolution": "832x480",
+      "reference_duration_seconds": 5,
+      "official_vram_reference_gb": 8.19,
+      "caveat": "The model card quotes 8.19 GB for the native 1.3B model path, while current Diffusers pipeline documentation describes roughly 13 GB for its Wan T2V pipeline. Memory depends on implementation, resolution, frames, offloading and library versions. Use the 13 GB figure for conservative planning and benchmark on the allocated GPU. Text-to-video only in this adapter.",
+      "diffusers_documentation_reference_vram_gb": 13
+    },
+    {
+      "id": "cogvideox-2b",
+      "name": "CogVideoX 2B",
+      "task": "text_to_video",
+      "repository": "zai-org/CogVideoX-2b",
+      "license": "Apache-2.0",
+      "status": "benchmark_candidate",
+      "reference_vram_gb": {
+        "fp16": 12.5,
+        "int8_torchao": 7.8
+      },
+      "caveat": "Quantization support and actual memory depend on the GPU, Torch, Diffusers and torchao versions."
+    },
+    {
+      "id": "cogvideox-5b-i2v",
+      "name": "CogVideoX 5B I2V",
+      "task": "image_to_video",
+      "repository": "zai-org/CogVideoX-5b-I2V",
+      "license": "Apache-2.0",
+      "status": "benchmark_candidate",
+      "reference_vram_gb": {
+        "int8_torchao": 11.4
+      },
+      "caveat": "The repository lists low-memory Diffusers/INT8 options; test on the exact P100/T4 hardware before relying on it."
+    },
+    {
+      "id": "wan22-ti2v-5b",
+      "name": "Wan 2.2 TI2V 5B",
+      "task": "text_image_to_video",
+      "repository": "Wan-AI/Wan2.2-TI2V-5B",
+      "license": "Apache-2.0",
+      "status": "not_in_free_gpu_baseline",
+      "official_minimum_vram_gb_for_documented_720p_command": 24
+    },
+    {
+      "id": "ltx25",
+      "name": "LTX-2.5",
+      "task": "multi_shot_audio_video",
+      "repository": "Lightricks/LTX-2",
+      "license": "LTX-2.x Community License for model weights; Apache-2.0 for code",
+      "status": "future_high_end_option",
+      "caveat": "22B model family is not suitable as the first free P100/T4 baseline. Review model licence separately from repository code licence."
+    },
+    {
+      "id": "sdxl-base-1.0",
+      "name": "Stable Diffusion XL 1.0 Base",
+      "task": "text_to_image",
+      "repository": "stabilityai/stable-diffusion-xl-base-1.0",
+      "license": "CreativeML Open RAIL++-M",
+      "status": "image_generation_candidate"
+    },
+    {
+      "id": "kokoro-82m",
+      "name": "Kokoro 82M",
+      "task": "text_to_speech",
+      "repository": "hexgrad/Kokoro-82M",
+      "license": "Apache-2.0",
+      "status": "voice_generation_candidate"
+    }
+  ]
+}

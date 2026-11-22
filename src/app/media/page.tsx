@@ -29,6 +29,7 @@ export default function MediaPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [projectFilter, setProjectFilter] = useState("");
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState("");
 
@@ -52,6 +53,10 @@ export default function MediaPage() {
   }, [filter]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("projectId") || "";
+    if (requested) setProjectFilter(requested);
+  }, []);
 
   async function updateAsset(id: string, patch: Record<string, unknown>) {
     setBusyId(id);
@@ -94,8 +99,9 @@ export default function MediaPage() {
       (filter === "uploaded" && asset.source_type === "uploaded") ||
       (filter === "favorite" && asset.is_favorite);
     const textMatch = `${asset.name} ${(asset.tags || []).join(" ")}`.toLowerCase().includes(query.toLowerCase());
-    return typeMatch && textMatch && (filter === "trash" ? Boolean(asset.deleted_at) : !asset.deleted_at);
-  }), [assets, filter, query]);
+    const projectMatch = !projectFilter || asset.project_id === projectFilter;
+    return typeMatch && textMatch && projectMatch && (filter === "trash" ? Boolean(asset.deleted_at) : !asset.deleted_at);
+  }), [assets, filter, query, projectFilter]);
 
   return (
     <div className="page-wrap">
@@ -109,6 +115,10 @@ export default function MediaPage() {
         <div className="search-box" style={{ width: 280 }}><Search size={14} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search names and tags…" /></div>
         <select className="field" style={{ maxWidth: 190 }} value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="all">All active assets</option><option value="video">Videos</option><option value="image">Images</option><option value="audio">Audio</option><option value="generated">Generated</option><option value="uploaded">Uploaded</option><option value="favorite">Favourites</option><option value="trash">Trash</option>
+        </select>
+        <select className="field" style={{ maxWidth: 210 }} value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}>
+          <option value="">All projects</option>
+          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
         </select>
         <span className="pill">{filtered.length} assets</span>
       </div>

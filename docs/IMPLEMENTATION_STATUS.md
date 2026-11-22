@@ -1,46 +1,52 @@
-# Implementation status
+# NELLWICK AI Film Studio — implementation status
 
-## Included in this first code drop
+This document separates implemented workspace workflows from model/rendering capabilities that still require integration and live testing.
 
-- [x] New standalone Next.js application shell and cinematic responsive dashboard.
-- [x] Supabase server/browser clients, session-refresh middleware and email/password login/signup page.
-- [x] SQL schema for projects, episodes, characters, locations, scenes, shots, assets, production jobs, integrations, worker tokens and activity log.
-- [x] RLS policies for user-owned creative data.
-- [x] Project creation/listing and episode creation.
-- [x] Manifest-driven multi-shot queue jobs (up to 120 prompts per job), linked optionally to a project episode; workers assemble shots in manifest order.
-- [x] Production job creation, worker token issuance, atomic job claim, progress/checkpoint, completion and retry-on-failure lease flow.
-- [x] Google Drive OAuth server flow with offline access and encrypted refresh token.
-- [x] Chunked browser-to-Drive upload using Drive resumable sessions, followed by media metadata registration. Session recovery after a browser reload is not yet persisted.
-- [x] Colab/Kaggle notebooks and a Wan 2.1 T2V 1.3B worker that uploads clips and masters to Drive.
-- [x] Research/model decision record.
+## Included in this feature batch
 
-## Not yet implemented; do not treat as complete
+- [x] Middleware redirects signed-out visitors from studio pages to `/login` and preserves the requested destination.
+- [x] Login page returns signed-in users to a safe same-origin destination; studio shell includes sign-out.
+- [x] Project detail supports editing and deleting the project, episode creation and direct links into the selected episode's Director and Storyboard tools.
+- [x] Episode API supports updating synopsis, screenplay, status and JSON production manifest, plus deletion.
+- [x] Character create/list/update/delete records scoped to the user's project.
+- [x] Location create/list/update/delete records scoped to the user's project.
+- [x] Scene create/list/update/delete records scoped to the user's episode.
+- [x] Shot create/list/update/delete records scoped to the user's scene.
+- [x] Director saves screenplay and synopsis; deterministic screenplay heading parser creates scene records. No LLM screenplay generation adapter is connected.
+- [x] Storyboard edits shot prompts, action descriptions, negative prompts and duration; compatible saved shots can be queued from the storyboard.
+- [x] A storyboard-shot queue endpoint creates production manifests with the persisted shot UUIDs and validates compatibility with the existing Wan 2.1 T2V 1.3B worker.
+- [x] Worker claim, completion, failure and retry handlers synchronize linked shot states. Generated shot files are linked back to their storyboard records.
+- [x] Media Library can filter by project.
+- [x] Audio page lists and uploads audio assets through the existing Drive uploader. TTS, voice cloning and mixing are not implemented.
+- [x] Film Editor stores a non-destructive edit decision list in an episode production manifest. Final multi-track rendering, transitions, audio mixing and export are not implemented.
+- [x] Shorts Studio stores vertical source-range plans in an episode production manifest. Automatic reframing, captions and actual short rendering are not implemented.
+- [x] Kaggle and Colab notebooks reference the actual Freelankarx repository URL. They attempt public clone first and request a read-only GitHub token only if private-repository authentication is needed; the token is not written to the remote URL or notebook file.
 
-- [ ] AI script/screenplay writer and scene/shot plan UI (Qwen3-4B researched as a local candidate; no adapter is wired yet).
-- [ ] Character and world CRUD UI, character image generation and identity-conditioning.
-- [ ] Storyboard image-generation adapter and approval interface.
-- [ ] CogVideoX I2V or any image-to-video adapter.
-- [ ] SDXL image-generation adapter.
-- [ ] Kokoro TTS adapter, dialogue timing, music and audio mixing.
-- [ ] Full multi-track editor and timeline data model/API.
-- [ ] Automatic Shorts detection/reframing and social export presets.
-- [x] Media management: rename in Drive, preview/open, download, tags, favourites, assign/unassign project, safe trash/restore (trash does not delete the Drive original).
-- [ ] Named collections/folders in the application UI, bulk selection/actions, episode-level attachment controls, and permanent deletion policy.
-- [ ] Automated model hardware benchmarking across Kaggle P100 and Colab GPU variants. The included preflight reports the actual GPU and rejects devices below the current 12 GiB guardrail and warns below 15 GiB; 16 GiB is preferred. Actual GPU compatibility still requires an end-to-end notebook test.
-- [ ] End-to-end tests against real Supabase and Google Drive accounts.
+## Existing capabilities carried forward
 
-This status file is deliberately explicit: an attractive UI shell is not proof of a working model pipeline. The worker checkpoint is per completed shot: completed clips are reused from Drive when a new notebook session resumes, but a GPU interruption in the middle of generating a shot may require that shot to be generated again. Run the test shot and verify the Drive file before relying on the worker for longer productions.
+- [x] Supabase schema and RLS policies for projects, episodes, characters, locations, scenes, shots, assets, production jobs, integrations, worker tokens and activity log.
+- [x] Email/password Supabase authentication.
+- [x] Project and episode base APIs, production job queue, worker token, atomic worker claim, progress and Google Drive OAuth/upload APIs.
+- [x] Media metadata management, favourites, tags, project assignment and soft trash/restore.
+- [x] Wan 2.1 T2V 1.3B worker adapter with resumable per-shot checkpointing and Drive output registration.
 
-## Validation performed for this source package
+## Still not complete
 
-- [x] Python worker passed `python -m py_compile`.
-- [x] Both notebook files parsed as valid Jupyter JSON.
-- [x] `package.json`, `tsconfig.json` and `model_registry.json` parsed as valid JSON.
-- [x] 49 TypeScript/TSX source files passed a TypeScript transpile syntax check with zero parse diagnostics.
-- [x] ZIP archive integrity check passed.
-- [ ] Full TypeScript semantic typecheck, ESLint and Next.js production build. Dependency installation could not complete because the package registry connection timed out in the build environment.
-- [ ] Live Supabase sign-in/database/RLS tests, Google OAuth consent and real Drive resumable-upload tests.
-- [ ] Actual GPU inference and quality/speed benchmark in a Kaggle or Colab session.
-- [ ] Live GitHub push and Vercel deployment.
+- [ ] AI screenplay generation and AI-assisted story development via a connected provider/model.
+- [ ] Character/reference image generation, identity conditioning and image-to-video adapter.
+- [ ] Storyboard image generation and visual approval/revision tools.
+- [ ] Speech synthesis, dialogue timing, voice cloning, licensed music and audio mixing.
+- [ ] Full multi-track timeline with preview, transitions, captions/subtitles, audio mixing and FFmpeg master export.
+- [ ] Actual vertical reframing/cropping, caption generation and Shorts export.
+- [ ] Additional model adapters beyond the current Wan 2.1 T2V 1.3B text-to-video path.
+- [ ] Live end-to-end tests against the user's Vercel deployment, Supabase Auth, Google Drive OAuth/resumable uploads and real Kaggle/Colab GPU inference.
 
-A syntax check is not a substitute for `npm run typecheck`, `npm run lint` or `npm run build`. Complete those checks after installing dependencies locally, then test the cloud integrations and GPU worker with your own accounts.
+## Validation status
+
+- [x] All patch TypeScript/TSX files passed TypeScript transpile syntax validation (no parse diagnostics).
+- [x] A local structural type pass with temporary ambient stubs found no additional internal TypeScript errors. This is not a substitute for the project's actual `npm run typecheck`.
+- [x] Both Jupyter notebooks parse as valid JSON after the repository URL update.
+- [ ] Full project `npm run typecheck`, `npm run lint` and `npm run build` must be run in the user's project folder where the real dependencies are installed.
+- [ ] Auth/session tests, CRUD tests, production queue tests, worker processing, Drive registration and rendered-output tests remain to be run against the live services.
+
+A page displaying a working control is not considered complete until its operation has been verified against the live service. Do not treat edit plans as rendered videos or asset management as generated audio.

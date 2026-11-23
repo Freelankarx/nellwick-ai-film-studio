@@ -31,13 +31,41 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid completion payload." }, { status: 400 });
   const admin = createAdminClient();
   const input = parsed.data;
-  const { data: job } = await admin.from("production_jobs").select("id,project_id,episode_id,result").eq("id", input.job_id).eq("owner_id", worker.ownerId).maybeSingle();
+  const { data: job, error: jobError } = await admin.from("production_jobs")
+    .select("id,project_id,episode_id,result,status").eq("id", input.job_id).eq("owner_id", worker.ownerId).maybeSingle();
+  if (jobError) return NextResponse.json({ error: jobError.message }, { status: 500 });
   if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
+  if (job.status === "cancelled") return NextResponse.json({ error: "Job was cancelled before completion could be registered.", cancelled: true }, { status: 409 });
+  if (job.status !== "processing") return NextResponse.json({ error: `Job cannot be completed from status ${job.status}.` }, { status: 409 });
+
   const rows = input.assets.map((asset) => ({ ...asset, owner_id: worker.ownerId, project_id: job.project_id, episode_id: job.episode_id || null, storage_provider: STORAGE_PROVIDER }));
   const { data: inserted, error: assetError } = await admin.from("assets").insert(rows).select("id,name,drive_file_id");
   if (assetError) return NextResponse.json({ error: assetError.message }, { status: 500 });
 
-  // Link generated shot files back to their saved storyboard records.
+  const existingResult = job.result && typeof job.result === "object" && !Array.isArray(job.result) ? job.result as Record<string, Json> : {};
+  const finalResult: Record<string, Json> = {
+    ...existingResult,
+    ...(input.result || {}),
+    assets: (inserted || []).map((asset) => ({ id: asset.id, name: asset.name, drive_file_id: asset.drive_file_id })),
+  };
+  const { data: completed, error } = await admin.from("production_jobs").update({
+    status: "completed",
+    progress: 100,
+    result: finalResult,
+    completed_at: new Date().toISOString(),
+    lease_expires_at: null,
+    last_error: null
+  }).eq("id", input.job_id).eq("owner_id", worker.ownerId).eq("status", "processing").select("id").maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!completed) {
+    const insertedIds = (inserted || []).map((asset) => asset.id);
+    if (insertedIds.length) await admin.from("assets").delete().in("id", insertedIds).eq("owner_id", worker.ownerId);
+    const { data: latest } = await admin.from("production_jobs").select("status")
+      .eq("id", input.job_id).eq("owner_id", worker.ownerId).maybeSingle();
+    return NextResponse.json({ error: latest?.status === "cancelled" ? "Job was cancelled before completion could be registered." : "Job state changed before completion could be registered.", cancelled: latest?.status === "cancelled" }, { status: 409 });
+  }
+
+  // Link generated shot files back to their saved storyboard records only after job completion wins the race.
   let linkedShots = 0;
   const assetsByDriveId = new Map<string, { id: string; name: string; drive_file_id: string | null }>();
   for (const asset of inserted || []) {
@@ -50,15 +78,5 @@ export async function POST(request: Request) {
     const { error: shotError } = await admin.from("shots").update({ status: "completed", output_asset_id: linkedAsset.id }).eq("id", shotId.data).eq("owner_id", worker.ownerId);
     if (!shotError) linkedShots += 1;
   }
-
-  const existingResult = job.result && typeof job.result === "object" && !Array.isArray(job.result) ? job.result as Record<string, Json> : {};
-  const finalResult: Record<string, Json> = {
-    ...existingResult,
-    ...(input.result || {}),
-    linked_storyboard_shots: linkedShots,
-    assets: (inserted || []).map((asset) => ({ id: asset.id, name: asset.name, drive_file_id: asset.drive_file_id })),
-  };
-  const { error } = await admin.from("production_jobs").update({ status: "completed", progress: 100, result: finalResult, completed_at: new Date().toISOString(), lease_expires_at: null, last_error: null }).eq("id", input.job_id).eq("owner_id", worker.ownerId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, assets: inserted || [], linked_storyboard_shots: linkedShots });
 }

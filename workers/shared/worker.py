@@ -14,6 +14,10 @@ QWEN3_1_7B_MODEL_ID = "Qwen/Qwen3-1.7B"
 class StudioError(RuntimeError):
     pass
 
+class JobCancelled(StudioError):
+    """Raised when the studio asks this worker to stop the current job."""
+    pass
+
 class NELLWICKWorker:
     def __init__(self, studio_url: str, token: str, worker_label: str, max_jobs: int = 2):
         self.base = studio_url.rstrip("/")
@@ -29,6 +33,11 @@ class NELLWICKWorker:
         self.qwen_model = None
         self.qwen_tokenizer = None
         self.qwen_model_id = None
+        self.cancel_event: threading.Event | None = None
+
+    def raise_if_cancelled(self):
+        if self.cancel_event is not None and self.cancel_event.is_set():
+            raise JobCancelled("Cancellation requested from the NELLWICK production queue.")
 
     def api(self, method: str, path: str, **kwargs):
         response = self.session.request(method, self.base + path, timeout=90, **kwargs)
@@ -108,6 +117,7 @@ class NELLWICKWorker:
         retries = 0
         with local_path.open("rb") as stream:
             while offset < size:
+                self.raise_if_cancelled()
                 stream.seek(offset)
                 chunk = stream.read(min(CHUNK_SIZE, size - offset))
                 end = offset + len(chunk) - 1
@@ -142,6 +152,7 @@ class NELLWICKWorker:
         destination.parent.mkdir(parents=True, exist_ok=True)
         with destination.open("wb") as out:
             for chunk in response.iter_content(1024 * 1024):
+                self.raise_if_cancelled()
                 if chunk: out.write(chunk)
 
     def unload_wan(self):
@@ -484,7 +495,26 @@ class NELLWICKWorker:
         prompt = shot.get("prompt", "")
         if not prompt.strip(): raise StudioError("A shot is missing its text prompt.")
         generator = torch.Generator(device="cpu").manual_seed(int(shot.get("seed") or int(time.time()) % 2**31))
-        result = self.pipe(prompt=prompt, negative_prompt=shot.get("negative_prompt", "blurry, flicker, jitter, distorted anatomy, text, watermark"), height=height, width=width, num_frames=frames, num_inference_steps=int(shot.get("steps", 30)), guidance_scale=float(shot.get("guidance_scale", 6.0)), generator=generator)
+        self.raise_if_cancelled()
+
+        # Diffusers invokes this callback after every denoising step, allowing a
+        # running Wan render to stop without waiting for all frames to finish.
+        def cancellation_checkpoint(_pipeline, _step_index, _timestep, callback_kwargs):
+            self.raise_if_cancelled()
+            return callback_kwargs
+
+        result = self.pipe(
+            prompt=prompt,
+            negative_prompt=shot.get("negative_prompt", "blurry, flicker, jitter, distorted anatomy, text, watermark"),
+            height=height,
+            width=width,
+            num_frames=frames,
+            num_inference_steps=int(shot.get("steps", 30)),
+            guidance_scale=float(shot.get("guidance_scale", 6.0)),
+            generator=generator,
+            callback_on_step_end=cancellation_checkpoint,
+        )
+        self.raise_if_cancelled()
         frames_out = result.frames[0]
         output_path.parent.mkdir(parents=True, exist_ok=True)
         export_to_video(frames_out, str(output_path), fps=fps)
@@ -506,11 +536,15 @@ class NELLWICKWorker:
             raise StudioError("FFmpeg could not assemble clips: " + run.stderr[-1200:])
 
     def update_progress(self, job_id: str, percent: float, message: str, patch: dict | None = None):
-        self.api("POST", "/api/worker/progress", json={"job_id": job_id, "progress": min(99, max(0, percent)), "message": message, "result_patch": patch or {}})
+        response = self.api("POST", "/api/worker/progress", json={"job_id": job_id, "progress": min(99, max(0, percent)), "message": message, "result_patch": patch or {}})
+        if response.get("cancelled"):
+            raise JobCancelled("Cancellation requested from the NELLWICK production queue.")
+        self.raise_if_cancelled()
         print(f"[{percent:5.1f}%] {message}")
 
     def process_job(self, job: dict):
         job_id = job["id"]
+        self.raise_if_cancelled()
         manifest = job.get("manifest") or {}
         task = manifest.get("task", "video_generation")
         if task in ("story_plan", "shot_plan"):
@@ -537,6 +571,7 @@ class NELLWICKWorker:
         assets = []
         total = len(shots)
         for index, shot in enumerate(shots, start=1):
+            self.raise_if_cancelled()
             shot_id = shot.get("id") or f"shot_{index:03d}"
             old = completed_by_id.get(shot_id)
             local = work_dir / f"shot_{index:03d}.mp4"
@@ -553,6 +588,7 @@ class NELLWICKWorker:
             progress_base = ((index - 1) / total) * 85
             self.update_progress(job_id, progress_base + 1, f"Generating shot {index}/{total}")
             self.generate_wan_shot(shot, local, manifest.get("settings", {}))
+            self.raise_if_cancelled()
             self.update_progress(job_id, progress_base + 6, f"Uploading shot {index}/{total} to Google Drive")
             file_info = self.upload_resumable(local, shots_folder)
             saved = {"shot_id": shot_id, "drive_file_id": file_info["id"], "name": file_info["name"], "drive_path": f"Projects/{manifest.get('project',{}).get('name','Project')}/Episodes/{manifest.get('episode',{}).get('title','Production')}/Generated Shots"}
@@ -560,26 +596,38 @@ class NELLWICKWorker:
             clips.append(local)
             assets.append({"name": file_info["name"], "mime_type": "video/mp4", "file_size": int(file_info.get("size", local.stat().st_size)), "drive_file_id": file_info["id"], "drive_path": saved["drive_path"], "source_type": "generated", "metadata": {"shot_id": shot_id, "model_id": model_id}})
             self.update_progress(job_id, (index / total) * 85, f"Saved shot {index}/{total}", {"completed_shots": completed})
+        self.raise_if_cancelled()
         self.update_progress(job_id, 90, "Assembling the episode master")
         master = work_dir / "nellwick_master.mp4"
         self.assemble(clips, master)
         master_info = self.upload_resumable(master, project_folder)
+        self.raise_if_cancelled()
         assets.append({"name": master_info["name"], "mime_type": "video/mp4", "file_size": int(master_info.get("size", master.stat().st_size)), "drive_file_id": master_info["id"], "drive_path": f"Projects/{manifest.get('project',{}).get('name','Project')}/Episodes/{manifest.get('episode',{}).get('title','Production')}", "source_type": "rendered", "metadata": {"render": "ffmpeg-concat", "shot_count": len(shots)}})
         self.update_progress(job_id, 97, "Registering generated media and completing job")
+        self.raise_if_cancelled()
         self.api("POST", "/api/worker/complete", json={"job_id": job_id, "assets": assets, "result": {"completed_shots": completed, "master_drive_file_id": master_info["id"], "rendered_with": "FFmpeg concat demuxer", "model_id": WAN_MODEL_ID}})
         print("Job completed. Master file:", master_info.get("name"), "Drive ID:", master_info.get("id"))
 
     def start_heartbeat(self, job_id: str):
         stop_event = threading.Event()
+        cancel_event = threading.Event()
+
         def ping_loop():
-            while not stop_event.wait(120):
+            # Poll often enough to make Stop responsive, while still renewing
+            # the 10-minute lease for healthy jobs.
+            while not stop_event.wait(10):
                 try:
-                    self.api("POST", "/api/worker/heartbeat", json={"job_id": job_id})
+                    response = self.api("POST", "/api/worker/heartbeat", json={"job_id": job_id})
+                    if response.get("cancelled"):
+                        cancel_event.set()
+                        print("Cancellation requested. Waiting for the current safe checkpoint…")
+                        break
                 except Exception as exc:
                     print("Heartbeat warning:", exc)
+
         thread = threading.Thread(target=ping_loop, daemon=True)
         thread.start()
-        return stop_event, thread
+        return stop_event, thread, cancel_event
 
     def run(self):
         self.preflight()
@@ -593,9 +641,24 @@ class NELLWICKWorker:
                 print("No queued jobs. Worker session is idle; you can stop the notebook.")
                 break
             print("Claimed job:", job.get("title"), job.get("id"))
-            stop_heartbeat, heartbeat_thread = self.start_heartbeat(job["id"])
+            stop_heartbeat, heartbeat_thread, cancel_event = self.start_heartbeat(job["id"])
+            self.cancel_event = cancel_event
             try:
                 self.process_job(job)
+            except JobCancelled as exc:
+                print("Job cancellation received:", exc)
+                # Release model memory before acknowledging the stop. The server
+                # only makes the job retryable after this acknowledgement.
+                try:
+                    self.unload_wan()
+                    self.unload_qwen()
+                except Exception as cleanup_error:
+                    print("Model cleanup warning while stopping:", cleanup_error)
+                try:
+                    self.api("POST", "/api/worker/heartbeat", json={"job_id": job["id"], "ack_cancelled": True})
+                    print("Cancellation acknowledged. Unfinished shots are available to queue again.")
+                except Exception as ack_error:
+                    print("Could not acknowledge cancellation; the job lease will expire automatically:", ack_error)
             except Exception as exc:
                 details = f"{type(exc).__name__}: {exc}"
                 print(details)
@@ -605,6 +668,7 @@ class NELLWICKWorker:
             finally:
                 stop_heartbeat.set()
                 heartbeat_thread.join(timeout=3)
+                self.cancel_event = None
             processed += 1
         print(f"Worker session finished. Jobs claimed: {processed}. You may run the notebook again to resume the queue.")
 

@@ -23,7 +23,7 @@ The screenplay director, character/continuity manager, storyboard approval UI, m
 - Git and a GitHub account.
 - Vercel account.
 - Supabase account and a new project for this app.
-- Google Cloud project with the Google Drive API enabled and an OAuth 2.0 Web application client.
+- Google Auth Platform Personal mode project and Web application OAuth client (for the Studio owner’s Google Account).
 - Kaggle and/or Google Colab account with GPU access available for the session.
 
 No paid API key is required by the initial notebook worker. Free GPU access is not guaranteed and model generation can be slow.
@@ -67,20 +67,27 @@ Open `http://localhost:3000`.
 
 Supabase Free currently includes 500 MB database, 1 GB file storage and projects may pause after one week of inactivity. Its Free Storage per-file size limit is 50 MB. Keep generated video masters in Google Drive, not Supabase. Check the live Supabase pricing/usage page because quotas can change.
 
-## 4. Google Drive OAuth setup
+## 4. Google Drive OAuth setup (Personal mode)
 
-1. In Google Cloud Console create/select a project.
-2. Enable **Google Drive API**.
-3. Configure the OAuth consent screen. Add your own Google account as a test user while the app is in testing mode.
-4. Create an OAuth Client ID of type **Web application**.
-5. Add this authorised redirect URI:
-   - Local: `http://localhost:3000/api/drive/callback`
-   - Deployed: `https://YOUR-VERCEL-DOMAIN/api/drive/callback`
-6. Put the OAuth client ID and secret into `.env.local`, and set `GOOGLE_REDIRECT_URI` to the exact redirect URI you configured.
-7. Sign into the studio and open Settings → Connect Google Drive.
-8. Approve the requested `drive.file` scope. The app creates a `NELLWICK AI FILM STUDIO` folder in your Drive.
+For a Studio that only connects the owner's Google Account, use Google Auth Platform **Personal mode** rather than configuring a public OAuth app.
 
-The server requests offline OAuth access and encrypts the refresh token with `TOKEN_ENCRYPTION_KEY`. If Google does not return a refresh token on a later consent, the app retains the existing encrypted token. While an external OAuth consent screen is in Testing mode, Google may expire refresh tokens after seven days for non-basic scopes; for a persistent personal production connection, configure the consent screen appropriately and review Google verification requirements. To revoke access, remove the app from your Google Account's third-party access settings.
+1. Open the [Google Auth Platform Personal mode onboarding page](https://console.cloud.google.com/auth/overview/personal).
+2. Select or create a Personal mode project and create an OAuth client of type **Web application**.
+3. Enable **Google Drive API** for that project if it is not already enabled.
+4. Add this exact authorised redirect URI: `https://nellwick-ai-film-studio.vercel.app/api/drive/callback`.
+5. Copy the OAuth Client ID and Client Secret. Keep them private.
+6. In Vercel → Project → Settings → Environment Variables, set these for Production:
+   - `NEXT_PUBLIC_APP_URL=https://nellwick-ai-film-studio.vercel.app`
+   - `GOOGLE_CLIENT_ID` = your Personal mode Web client ID
+   - `GOOGLE_CLIENT_SECRET` = your Personal mode Web client secret
+   - `GOOGLE_REDIRECT_URI=https://nellwick-ai-film-studio.vercel.app/api/drive/callback`
+   - `TOKEN_ENCRYPTION_KEY` = a random 32-byte key encoded as 64 hexadecimal characters
+7. Redeploy Vercel, sign into NELLWICK, then open Settings → Connect Google Drive using the same Google Account that created the Personal mode application.
+8. Approve the requested `drive.file` scope. NELLWICK creates a `NELLWICK AI FILM STUDIO` folder in your Drive.
+
+Personal mode is limited to the Google Account that created the OAuth application, does not require OAuth app verification for that account, and cannot later be converted into an External app. If NELLWICK is opened to other users who must connect their own Google Drives, create a separate External OAuth project and follow Google's then-current requirements. NELLWICK requests offline OAuth access and encrypts the refresh token with `TOKEN_ENCRYPTION_KEY`. To revoke access, remove NELLWICK from your Google Account's third-party access settings.
+
+The application uses the exact same callback URI for authorization and code exchange. In production, it falls back to the current request origin instead of sending users to `localhost` if `NEXT_PUBLIC_APP_URL` is missing; the explicit Production variables above should still be configured.
 
 ## 5. Push to GitHub
 

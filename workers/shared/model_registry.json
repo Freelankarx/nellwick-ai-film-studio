@@ -8,10 +8,23 @@
       "task": "script_and_story_planning",
       "repository": "Qwen/Qwen3-4B",
       "license": "Apache-2.0",
-      "status": "planned_local_story_planner_candidate",
+      "status": "enabled_for_local_story_and_shot_planning_adapter_requires_live_gpu_benchmark",
       "context_length_tokens": 32768,
-      "reference_quantized_memory_gb": 2.9,
-      "caveat": "Qwen3 requires Transformers 4.51 or newer. The Qwen team reports about 2.9 GB GPU memory for one AWQ-INT4 benchmark configuration; do not treat that as a universal runtime guarantee. bitsandbytes NF4 is documented for NVIDIA Pascal P100 and Turing T4, but adapter integration and notebook tests are still required. Unload the text model before video inference to free GPU memory."
+      "caveat": "The initial worker uses FP16 Transformers inference and does not require bitsandbytes. GPU memory headroom, system RAM, runtime/library versions and provider availability affect success. The adapter requires a real Kaggle/Colab benchmark before being treated as production-verified. Qwen is unloaded before Wan video generation.",
+      "inference_precision": "FP16",
+      "hardware_policy": "Selected when total CUDA VRAM is at least 15 GiB; runtime also reserves GPU headroom and can offload model layers to system RAM."
+    },
+    {
+      "id": "qwen3-1.7b-story-planner",
+      "name": "Qwen3 1.7B Instruct fallback",
+      "task": "script_and_story_planning",
+      "repository": "Qwen/Qwen3-1.7B",
+      "license": "Apache-2.0",
+      "status": "enabled_as_low_vram_fallback_requires_live_gpu_benchmark",
+      "context_length_tokens": 32768,
+      "inference_precision": "FP16",
+      "hardware_policy": "Selected by the worker when total CUDA VRAM is at least 8 GiB and below 15 GiB.",
+      "caveat": "The worker uses Transformers FP16 inference with automatic device mapping and CPU offload where required. This smaller fallback may produce less detailed scripts and shot lists than Qwen3-4B. Benchmark on the actual notebook GPU before relying on it."
     },
     {
       "id": "wan21-t2v-1.3b",

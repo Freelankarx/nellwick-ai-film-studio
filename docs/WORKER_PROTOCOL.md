@@ -28,3 +28,14 @@ Large uploads use the Drive resumable upload protocol. This is important because
 ## Current worker capability
 
 The included worker supports Wan 2.1 T2V 1.3B text-to-video shots of 2–5 seconds. It can process a multi-shot manifest and concatenate the resulting clips. It does not yet provide full screenplay generation, text-to-image, image-to-video, voice cloning, multi-track timeline editing, music licensing, automatic Shorts selection or YouTube publishing.
+
+
+## Local AI planning jobs
+
+The normal worker claim endpoint can return three manifest task types:
+
+- `story_plan`: run Qwen3 locally, then POST validated story output to `/api/worker/complete-plan`. The API writes the episode synopsis and screenplay and creates scenes/locations.
+- `shot_plan`: run Qwen3 locally, then POST validated shot output to `/api/worker/complete-plan`. The API creates editable draft shots for Wan 2.1 T2V 1.3B.
+- `video_generation` (default when `manifest.task` is absent): run the existing Wan/Drive clip-generation workflow.
+
+Planning tasks do not call the Drive token endpoint. Video generation still requires the user's Google Drive integration. Qwen is unloaded before video inference to reduce VRAM contention. The additive `0002_ai_planning.sql` migration is required before completion because scenes and shots record the originating planning job ID.

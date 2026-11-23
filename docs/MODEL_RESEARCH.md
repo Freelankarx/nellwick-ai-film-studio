@@ -51,13 +51,15 @@ The official LTX repository calls LTX-2.5 the recommended model for new projects
 - https://github.com/Lightricks/LTX-2
 - https://github.com/Lightricks/LTX-Desktop
 
-## Script and shot planning: Qwen3-4B (planned candidate)
+## Script and shot planning: Qwen3-4B with Qwen3-1.7B fallback (adapter implemented; runtime benchmark pending)
 
-Qwen3-4B is a current 4B-parameter instruction model with an Apache 2.0 model card and a native 32,768-token context. The Qwen team benchmark reports about 2.9 GB GPU memory for an AWQ-INT4 Transformers configuration. This makes it a promising local story-planning candidate for a P100/T4-class notebook, but the benchmark hardware/configuration differs from our target notebook, so treat it as a test target rather than a guaranteed fit. Qwen3 requires Transformers 4.51 or newer. Hugging Face documents bitsandbytes NF4/FP4 support for Pascal P100 and Turing T4; exact binary/CUDA compatibility must still be checked in the notebook. The intended workflow is to load Qwen for script/shot-manifest planning, save the manifest, unload Qwen, then load the video model to avoid competing for GPU memory. The script planner adapter is not yet implemented in this first code drop.
+The Director and Storyboard now enqueue planning tasks for the interactive notebook worker. The worker selects `Qwen/Qwen3-4B` when the detected GPU has at least 15 GiB total VRAM; it selects `Qwen/Qwen3-1.7B` for GPUs with at least 8 GiB and less than 15 GiB. Both are Apache 2.0 model cards with a native 32,768-token context. The adapter uses FP16 Transformers inference with `device_map=auto`, a reserved GPU-memory budget and CPU offload; it does not require bitsandbytes. Qwen is unloaded after each planning task before a subsequent Wan video job is loaded.
 
-- Model: https://huggingface.co/Qwen/Qwen3-4B
-- Qwen benchmark: https://github.com/QwenLM/Qwen3/blob/main/docs/source/getting_started/speed_benchmark.md
-- bitsandbytes hardware compatibility: https://huggingface.co/docs/bitsandbytes/main/installation
+- 4B model: https://huggingface.co/Qwen/Qwen3-4B
+- 1.7B fallback: https://huggingface.co/Qwen/Qwen3-1.7B
+- Qwen benchmark and model information: https://github.com/QwenLM/Qwen3
+
+These are hardware-selection thresholds, not guarantees. The actual notebook must pass CUDA preflight, model download, generation and API completion on the assigned GPU. System RAM and free VRAM, other processes, Transformers/Accelerate versions, provider quotas and session duration affect success. The 1.7B fallback may produce shorter or less detailed outputs than 4B. The current story planner produces a first-draft treatment capped at 18 scenes per job; it must not be described as a complete feature-length screenplay. Users can expand scenes iteratively. Shot planning produces 3–6 draft shots per scene in normal operation, each constrained to the first Wan adapter's 2–5 second text-to-video format. No image generation, image-to-video or audio generation is implied by these planner jobs.
 
 ## Supporting models
 
@@ -85,4 +87,4 @@ Sources:
 
 ## Current implementation boundary
 
-Only Wan 2.1 T2V 1.3B text-to-video is enabled in the included Python worker. CogVideoX, SDXL, Kokoro, and LTX entries are researched/catalogued candidates, not implemented adapters. The UI has reserved modules for script planning, storyboards, character continuity, editing, Shorts and audio, but the first delivered codebase does not claim those modules are finished. Implement and benchmark each adapter separately.
+The Python worker now supports Qwen3 story/shot planning and Wan 2.1 T2V 1.3B text-to-video. The Qwen adapters still require live Kaggle/Colab GPU validation. CogVideoX, SDXL, Kokoro, and LTX entries are researched/catalogued candidates, not implemented adapters. The UI has reserved modules for script planning, storyboards, character continuity, editing, Shorts and audio, but the first delivered codebase does not claim those modules are finished. Implement and benchmark each adapter separately.

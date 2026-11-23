@@ -12,7 +12,9 @@ This document separates implemented workspace workflows from model/rendering cap
 - [x] Location create/list/update/delete records scoped to the user's project.
 - [x] Scene create/list/update/delete records scoped to the user's episode.
 - [x] Shot create/list/update/delete records scoped to the user's scene.
-- [x] Director saves screenplay and synopsis; deterministic screenplay heading parser creates scene records. No LLM screenplay generation adapter is connected.
+- [x] Director saves screenplay and synopsis; deterministic screenplay heading parser creates scene records.
+- [x] Director can queue local-GPU story planning jobs; the worker routes `story_plan` tasks to Qwen3-4B or the Qwen3-1.7B low-VRAM fallback and persists a synopsis, first-draft screenplay, reusable character profiles, scene records and locations. Live notebook inference still requires a provider GPU test.
+- [x] Storyboard can queue local-GPU shot breakdown jobs; the worker generates editable 2–5 second Wan-compatible shot prompts and persists them as draft shots. Live notebook inference still requires a provider GPU test.
 - [x] Storyboard edits shot prompts, action descriptions, negative prompts and duration; compatible saved shots can be queued from the storyboard.
 - [x] A storyboard-shot queue endpoint creates production manifests with the persisted shot UUIDs and validates compatibility with the existing Wan 2.1 T2V 1.3B worker.
 - [x] Worker claim, completion, failure and retry handlers synchronize linked shot states. Generated shot files are linked back to their storyboard records.
@@ -32,7 +34,7 @@ This document separates implemented workspace workflows from model/rendering cap
 
 ## Still not complete
 
-- [ ] AI screenplay generation and AI-assisted story development via a connected provider/model.
+- [ ] Live validation of the new Qwen3 local story/shot-planning adapter on an actual Kaggle or Colab GPU, including output quality, model downloads, memory use and job completion.
 - [ ] Character/reference image generation, identity conditioning and image-to-video adapter.
 - [ ] Storyboard image generation and visual approval/revision tools.
 - [ ] Speech synthesis, dialogue timing, voice cloning, licensed music and audio mixing.
@@ -41,11 +43,19 @@ This document separates implemented workspace workflows from model/rendering cap
 - [ ] Additional model adapters beyond the current Wan 2.1 T2V 1.3B text-to-video path.
 - [ ] Live end-to-end tests against the user's Vercel deployment, Supabase Auth, Google Drive OAuth/resumable uploads and real Kaggle/Colab GPU inference.
 
+## AI planning batch (22 November 2026)
+
+- [x] Added an additive migration for `generated_by_job_id` on scenes and shots so results can be traced to the planning job.
+- [x] Added authenticated user endpoints to enqueue story-plan and scene-shot-plan jobs.
+- [x] Added a worker-only completion endpoint that validates planning output and stores it in Supabase, including a reusable character bible with visual traits, wardrobe and voice notes; existing project profiles are provided to later plans as continuity canon.
+- [x] Added Qwen3-4B FP16 planning and Qwen3-1.7B FP16 fallback selection. The worker unloads Qwen before video inference and does not require Google Drive for planning-only jobs.
+- [ ] Apply `database/migrations/0002_ai_planning.sql` once in the existing Supabase project before using AI planning.
+- [ ] Test one story-plan job and one shot-plan job on a real notebook GPU.
+
 ## Validation status
 
-- [x] All patch TypeScript/TSX files passed TypeScript transpile syntax validation (no parse diagnostics).
-- [x] A local structural type pass with temporary ambient stubs found no additional internal TypeScript errors. This is not a substitute for the project's actual `npm run typecheck`.
-- [x] Both Jupyter notebooks parse as valid JSON after the repository URL update.
+- [x] Python worker passes `py_compile` in the patch preparation environment.
+- [x] Both Jupyter notebooks parse as valid JSON and use the real repository URL.
 - [ ] Full project `npm run typecheck`, `npm run lint` and `npm run build` must be run in the user's project folder where the real dependencies are installed.
 - [ ] Auth/session tests, CRUD tests, production queue tests, worker processing, Drive registration and rendered-output tests remain to be run against the live services.
 

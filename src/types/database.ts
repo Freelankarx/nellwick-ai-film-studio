@@ -1,7 +1,7 @@
 /**
  * NELLWICK AI FILM STUDIO database types.
- * Mirrors database/migrations/0001_initial_schema.sql.
- * Keep this file in sync with future SQL migrations.
+ * Mirrors database/migrations/0001_initial_schema.sql and additive migrations.
+ * Keep this file in sync with every SQL migration.
  */
 export type Json =
   | string
@@ -104,6 +104,7 @@ type SceneRow = {
   location_id: string | null;
   script_excerpt: string;
   continuity_notes: string;
+  generated_by_job_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -123,6 +124,7 @@ type ShotRow = {
   generation_settings: Json;
   status: string;
   output_asset_id: string | null;
+  generated_by_job_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -230,14 +232,14 @@ export type Database = {
       scenes: Table<SceneRow, {
         id?: string; owner_id: string; episode_id: string; scene_number: number;
         title?: string; summary?: string; location_id?: string | null;
-        script_excerpt?: string; continuity_notes?: string; created_at?: string; updated_at?: string;
+        script_excerpt?: string; continuity_notes?: string; generated_by_job_id?: string | null; created_at?: string; updated_at?: string;
       }>;
       shots: Table<ShotRow, {
         id?: string; owner_id: string; scene_id: string; shot_number: number;
         prompt?: string; negative_prompt?: string; camera?: Json; action_description?: string;
         duration_seconds?: number; aspect_ratio?: string; generation_mode?: string;
         model_id?: string; generation_settings?: Json; status?: string;
-        output_asset_id?: string | null; created_at?: string; updated_at?: string;
+        output_asset_id?: string | null; generated_by_job_id?: string | null; created_at?: string; updated_at?: string;
       }>;
       assets: Table<AssetRow, {
         id?: string; owner_id: string; project_id?: string | null; episode_id?: string | null;

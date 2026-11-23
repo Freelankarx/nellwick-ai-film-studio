@@ -117,7 +117,7 @@ TOKEN_ENCRYPTION_KEY=...`;
         <div className="setting-card">
           <div className="setting-icon"><Cloud size={18} /></div>
           <h3>Kaggle & Colab workers</h3>
-          <p>Start either notebook when you want to process queued shots. Workers claim jobs, save finished clips to Drive and report progress.</p>
+          <p>Start either notebook when you want to process queued story plans, storyboard shot plans or video jobs. Planning runs on the GPU and does not need Drive; video jobs save generated clips to Drive.</p>
           <button className="secondary-btn" onClick={() => void createToken()} disabled={busy}><KeyRound size={13} />{busy ? "Workingâ€¦" : "Create notebook token"}</button>
           {token && <div style={{ marginTop: 12 }}>
             <div className="notice">Copy this token now. It is displayed only once. Enter it at notebook runtime; never commit it to GitHub.</div>

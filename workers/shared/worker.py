@@ -518,8 +518,22 @@ class NELLWICKWorker:
         frames_out = result.frames[0]
         output_path.parent.mkdir(parents=True, exist_ok=True)
         export_to_video(frames_out, str(output_path), fps=fps)
-        if not output_path.exists() or output_path.stat().st_size < 100_000:
-            raise StudioError("Video model returned an unexpectedly small clip. Check the model/runtime logs.")
+        if not output_path.exists() or output_path.stat().st_size < 1024:
+            raise StudioError("Video export did not produce a non-empty MP4 file.")
+
+        import imageio_ffmpeg
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        validation = subprocess.run(
+            [ffmpeg, "-v", "error", "-i", str(output_path), "-map", "0:v:0", "-f", "null", "-"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if validation.returncode != 0:
+            raise StudioError(
+                "Video export failed FFmpeg decoding: "
+                + (validation.stderr[-1000:] or "unknown decoding error")
+            )
 
     def assemble(self, clip_paths: list[Path], output_path: Path):
         if len(clip_paths) == 1:

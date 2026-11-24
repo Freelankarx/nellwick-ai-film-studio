@@ -8,6 +8,7 @@ import requests
 
 CHUNK_SIZE = 8 * 1024 * 1024
 WAN_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+SDXL_MODEL_ID = "stabilityai/stable-diffusion-xl-base-1.0"
 QWEN3_4B_MODEL_ID = "Qwen/Qwen3-4B"
 QWEN3_1_7B_MODEL_ID = "Qwen/Qwen3-1.7B"
 
@@ -29,6 +30,7 @@ class NELLWICKWorker:
         self.drive_token = None
         self.root_folder_id = None
         self.pipe = None
+        self.image_pipe = None
         self.ffmpeg = None
         self.qwen_model = None
         self.qwen_tokenizer = None
@@ -164,6 +166,55 @@ class NELLWICKWorker:
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+    def unload_sdxl(self):
+        if self.image_pipe is None:
+            return
+        import gc
+        import torch
+        self.image_pipe = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    def load_sdxl(self):
+        if self.image_pipe is not None:
+            return
+        import torch
+        from diffusers import StableDiffusionXLPipeline
+
+        props = torch.cuda.get_device_properties(0)
+        memory_gib = props.total_memory / (1024 ** 3)
+        if memory_gib < 12:
+            raise StudioError(
+                "The SDXL reference-image adapter requires at least 12 GiB total GPU memory. "
+                "Use a T4 16 GB or higher GPU for this first benchmark."
+            )
+        print(f"Loading {SDXL_MODEL_ID} in FP16. First use downloads the SDXL model weights.")
+        self.image_pipe = StableDiffusionXLPipeline.from_pretrained(
+            SDXL_MODEL_ID,
+            torch_dtype=torch.float16,
+            variant="fp16",
+            use_safetensors=True,
+        )
+        # T4-friendly memory policy: move only active modules to GPU.
+        self.image_pipe.enable_model_cpu_offload()
+        if hasattr(self.image_pipe, "enable_vae_slicing"):
+            self.image_pipe.enable_vae_slicing()
+        if hasattr(self.image_pipe, "enable_vae_tiling"):
+            self.image_pipe.enable_vae_tiling()
+        if hasattr(self.image_pipe, "enable_attention_slicing"):
+            self.image_pipe.enable_attention_slicing("max")
+        self.image_pipe.set_progress_bar_config(disable=False)
+        print(f"SDXL ready on {props.name} ({memory_gib:.1f} GiB). CPU offload is enabled.")
+
+    def project_reference_folder(self, manifest: dict) -> str:
+        if not self.root_folder_id:
+            self.get_drive_credentials()
+        project_name = manifest.get("project", {}).get("name", "Untitled Project")
+        projects_folder = self.ensure_folder("Projects", self.root_folder_id)
+        project_folder = self.ensure_folder(project_name[:100], projects_folder)
+        return self.ensure_folder("Reference Images", project_folder)
 
     def load_wan(self):
         if self.pipe is not None: return
@@ -549,6 +600,108 @@ class NELLWICKWorker:
         if run.returncode != 0:
             raise StudioError("FFmpeg could not assemble clips: " + run.stderr[-1200:])
 
+    def process_image_generation_job(self, job: dict):
+        import re
+        import torch
+        from PIL import Image
+
+        job_id = job["id"]
+        manifest = job.get("manifest") or {}
+        settings = manifest.get("settings") or {}
+        prompt = str(manifest.get("prompt") or "").strip()
+        if len(prompt) < 20:
+            raise StudioError("Reference image job is missing a usable prompt.")
+
+        width = int(settings.get("width", 1024))
+        height = int(settings.get("height", 1024))
+        variants = max(1, min(2, int(settings.get("variants", 1))))
+        steps = max(20, min(40, int(settings.get("num_inference_steps", 30))))
+        guidance = max(4.0, min(9.0, float(settings.get("guidance_scale", 6.5))))
+        target = manifest.get("target") or {}
+        target_name = str(target.get("name") or "Reference")
+        safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", target_name).strip("_")[:48] or "Reference"
+
+        if width < 512 or height < 512 or width % 8 or height % 8:
+            raise StudioError("Reference image dimensions must be at least 512px and divisible by 8.")
+
+        self.unload_wan()
+        self.unload_qwen()
+        self.update_progress(job_id, 4, "Preparing SDXL reference-image model")
+        self.load_sdxl()
+        work_dir = Path(tempfile.mkdtemp(prefix="nellwick_reference_"))
+        reference_folder = self.project_reference_folder(manifest)
+        assets = []
+        seed_base = int(settings.get("seed") or int(time.time()) % 2**31)
+
+        try:
+            for index in range(1, variants + 1):
+                self.raise_if_cancelled()
+                percent = 8 + ((index - 1) / variants) * 76
+                self.update_progress(job_id, percent, f"Generating reference image {index}/{variants}")
+                generator = torch.Generator(device="cpu").manual_seed(seed_base + index - 1)
+
+                def cancellation_checkpoint(_pipeline, _step_index, _timestep, callback_kwargs):
+                    self.raise_if_cancelled()
+                    return callback_kwargs
+
+                result = self.image_pipe(
+                    prompt=prompt,
+                    negative_prompt=str(manifest.get("negative_prompt") or "text, lettering, watermark, logo, blurry, low quality, distorted anatomy"),
+                    width=width,
+                    height=height,
+                    num_inference_steps=steps,
+                    guidance_scale=guidance,
+                    generator=generator,
+                    num_images_per_prompt=1,
+                    callback_on_step_end=cancellation_checkpoint,
+                )
+                self.raise_if_cancelled()
+                image = result.images[0]
+                output_path = work_dir / f"{safe_name.lower()}_reference_{index:02d}.png"
+                image.save(output_path, format="PNG", optimize=True)
+                if not output_path.exists() or output_path.stat().st_size < 10_000:
+                    raise StudioError("SDXL did not produce a valid reference image.")
+                with Image.open(output_path) as check:
+                    check.verify()
+
+                file_info = self.upload_resumable(output_path, reference_folder, "image/png")
+                assets.append({
+                    "name": file_info.get("name") or output_path.name,
+                    "mime_type": "image/png",
+                    "file_size": int(file_info.get("size", output_path.stat().st_size)),
+                    "drive_file_id": file_info["id"],
+                    "drive_path": f"Projects/{manifest.get('project', {}).get('name', 'Project')}/Reference Images",
+                    "source_type": "generated",
+                    "metadata": {
+                        "purpose": "visual_reference",
+                        "model_id": SDXL_MODEL_ID,
+                        "prompt": prompt,
+                        "seed": seed_base + index - 1,
+                        "target_type": target.get("type"),
+                        "target_id": target.get("id"),
+                        "target_name": target_name,
+                        "width": width,
+                        "height": height,
+                    },
+                })
+                self.update_progress(job_id, 8 + (index / variants) * 82, f"Saved reference image {index}/{variants} to Google Drive")
+
+            self.raise_if_cancelled()
+            self.api("POST", "/api/worker/complete", json={
+                "job_id": job_id,
+                "assets": assets,
+                "result": {
+                    "task": "image_generation",
+                    "model_id": SDXL_MODEL_ID,
+                    "target": target,
+                    "generated_images": len(assets),
+                    "prompt": prompt,
+                },
+            })
+            print(f"Reference image job completed: {len(assets)} image(s) saved to the project media library.")
+        finally:
+            self.unload_sdxl()
+
     def update_progress(self, job_id: str, percent: float, message: str, patch: dict | None = None):
         response = self.api("POST", "/api/worker/progress", json={"job_id": job_id, "progress": min(99, max(0, percent)), "message": message, "result_patch": patch or {}})
         if response.get("cancelled"):
@@ -561,6 +714,9 @@ class NELLWICKWorker:
         self.raise_if_cancelled()
         manifest = job.get("manifest") or {}
         task = manifest.get("task", "video_generation")
+        if task == "image_generation":
+            self.process_image_generation_job(job)
+            return
         if task in ("story_plan", "shot_plan"):
             # A previous video job in the same notebook session may leave Wan allocated.
             self.unload_wan()

@@ -11,8 +11,10 @@ type Project = { id: string; name: string };
 type Episode = { id: string; title: string };
 type AudioAsset = { id: string; name: string; mime_type: string | null; file_size: number | null; drive_file_id: string | null; created_at: string; source_type: string };
 type VoiceLine = { id: string; speaker: string; voiceId: string; text: string; speed: number };
+type AudioEngine = "kokoro" | "edge-tts";
+type CastVoice = { id: string; name: string; voice_profile?: Record<string, string> | null };
 
-const VOICES = [
+const KOKORO_VOICES = [
   { id: "af_heart", label: "Heart · American female" },
   { id: "af_bella", label: "Bella · American female" },
   { id: "af_sarah", label: "Sarah · American female" },
@@ -26,14 +28,25 @@ const VOICES = [
   { id: "bm_lewis", label: "Lewis · British male" },
 ];
 
+const EDGE_VOICES = [
+  { id: "en-US-ChristopherNeural", label: "Christopher · American male" },
+  { id: "en-US-JennyNeural", label: "Jenny · American female" },
+  { id: "en-US-AnaNeural", label: "Ana · American female (youthful)" },
+  { id: "en-US-GuyNeural", label: "Guy · American male" },
+  { id: "en-US-SteffanNeural", label: "Steffan · American male narrator" },
+];
+
 export default function AudioPage() {
   const [assets, setAssets] = useState<AudioAsset[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [cast, setCast] = useState<CastVoice[]>([]);
   const [projectId, setProjectId] = useState("");
   const [episodeId, setEpisodeId] = useState("");
   const [speaker, setSpeaker] = useState("Narrator");
+  const [engine, setEngine] = useState<AudioEngine>("kokoro");
   const [voiceId, setVoiceId] = useState("af_heart");
+  const voices = engine === "edge-tts" ? EDGE_VOICES : KOKORO_VOICES;
   const [text, setText] = useState("");
   const [speed, setSpeed] = useState(1);
   const [lines, setLines] = useState<VoiceLine[]>([]);
@@ -93,6 +106,18 @@ export default function AudioPage() {
   }, [projectId]);
 
   useEffect(() => {
+    if (!projectId) { setCast([]); return; }
+    let active = true;
+    fetch("/api/characters?projectId=" + encodeURIComponent(projectId), { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not load the project character voice profiles.");
+        if (active) setCast(data.characters || []);
+      })
+      .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : "Could not load character voice profiles."); });
+    return () => { active = false; };
+  }, [projectId]);
+  useEffect(() => {
     if (!jobId) return;
     let active = true;
     let checking = false;
@@ -109,7 +134,7 @@ export default function AudioPage() {
         setJobProgress(Number(job.progress || 0));
         if (job.status === "completed") {
           setJobId("");
-          setNotice("Dialogue WAV files and the combined track have been added to your audio library.");
+          setNotice("Generated dialogue audio, the combined track and any word-timed subtitle files have been added to your project Media Library.");
           await loadAssets();
         } else if (job.status === "failed" || job.status === "cancelled") {
           setJobId("");
@@ -126,6 +151,20 @@ export default function AudioPage() {
     return () => { active = false; window.clearInterval(timer); };
   }, [jobId, loadAssets]);
 
+  function useSavedCharacterVoice() {
+    const character = cast.find((item) => item.name.trim().toLowerCase() === speaker.trim().toLowerCase());
+    if (!character) { setError("No saved character profile matches this speaker name in the selected project."); return; }
+    const profile = character.voice_profile || {};
+    const saved = engine === "edge-tts" ? profile.edge_tts_voice : profile.kokoro_voice_id;
+    const allowed = voices.some((voice) => voice.id === saved);
+    if (!allowed || !saved) {
+      setError(engine === "edge-tts" ? "This character has no Edge TTS voice assigned in the NELLWICK Bible." : "This character has no Kokoro preset assigned in the NELLWICK Bible.");
+      return;
+    }
+    setVoiceId(saved);
+    setError("");
+    setNotice("Loaded the saved voice profile for " + character.name + ".");
+  }
   function addLine() {
     setError("");
     const cleanText = text.trim();
@@ -149,7 +188,7 @@ export default function AudioPage() {
       const response = await fetch("/api/jobs/audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, episodeId: episodeId || null, segments }),
+        body: JSON.stringify({ projectId, episodeId: episodeId || null, engine, segments }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not queue voice generation.");
@@ -167,7 +206,7 @@ export default function AudioPage() {
     <PageHeading
       eyebrow="LOCAL VOICE PRODUCTION"
       title="Voice & audio"
-      subtitle="Generate character dialogue and narration locally with Kokoro 82M, then manage WAV tracks stored in your connected Google Drive."
+      subtitle="Generate character dialogue and narration with optional online Edge voices or local Kokoro, then manage the audio and subtitle files stored in your connected Google Drive."
       action={<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button className="secondary-btn" onClick={() => void loadAssets()}><RefreshCw size={14}/>Refresh</button>
         <UploadMediaButton onUploaded={() => void loadAssets()}/>
@@ -176,11 +215,11 @@ export default function AudioPage() {
 
     <section className="panel" style={{ marginBottom: 18 }}>
       <div className="panel-heading">
-        <div><div className="panel-title">Dialogue & narration generator</div><div className="panel-subtitle">Free local model · no paid speech API</div></div>
-        <span className="pill">Kokoro 82M</span>
+        <div><div className="panel-title">Dialogue & narration generator</div><div className="panel-subtitle">Choose local/offline or optional online speech generation. No paid speech API is required.</div></div>
+        <span className="pill">{engine === "edge-tts" ? "Edge TTS · online" : "Kokoro 82M · local"}</span>
       </div>
       <div className="notice" style={{ marginTop: 12 }}>
-        Add one line per speaker. Keep the same voice preset assigned to a character across episodes. This first stage generates speech WAVs; acting direction, exact lip-sync and final mixing are later production stages.
+        Add one line per speaker and keep the same voice preset assigned to each recurring character. Edge TTS can return word-boundary subtitles but needs internet and may be throttled. Kokoro runs locally and is the offline fallback. Neither engine clones your character voice or guarantees lip-sync.
       </div>
       {projects.length ? <>
         <div className="form-grid" style={{ marginTop: 16, gridTemplateColumns: "1fr 1fr" }}>
@@ -197,14 +236,22 @@ export default function AudioPage() {
           </label>
         </div>
         <div className="form-grid" style={{ marginTop: 14, gridTemplateColumns: "1fr 1fr" }}>
+          <label className="field-label">Speech engine
+            <select className="field" value={engine} disabled={lines.length > 0} onChange={(event) => { const next = event.target.value as AudioEngine; setEngine(next); setVoiceId(next === "edge-tts" ? "en-US-JennyNeural" : "af_heart"); }}>
+              <option value="kokoro">Kokoro 82M · local / offline</option>
+              <option value="edge-tts">Microsoft Edge TTS · online / optional</option>
+            </select>
+          </label>
+          <div className="notice" style={{ marginTop: 20 }}>{engine === "edge-tts" ? "Online service: may be throttled, can change without notice and is not promised unlimited. Produces MP3 and timed SRT subtitle assets." : "Local speech synthesis: no external inference request. Uses preset voices and produces WAV tracks."}</div>
           <label className="field-label">Speaker / character
             <input className="field" value={speaker} onChange={(event) => setSpeaker(event.target.value)} maxLength={80} placeholder="e.g. Grace"/>
           </label>
           <label className="field-label">Voice preset
             <select className="field" value={voiceId} onChange={(event) => setVoiceId(event.target.value)}>
-              {VOICES.map((voice) => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
+              {voices.map((voice) => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
             </select>
           </label>
+          <button className="secondary-btn" type="button" onClick={useSavedCharacterVoice} disabled={!cast.length}>Use saved character voice</button>
           <label className="field-label">Speaking speed · {speed.toFixed(2)}×
             <input className="field" type="range" min="0.75" max="1.25" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))}/>
           </label>
@@ -216,7 +263,7 @@ export default function AudioPage() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
           <button className="secondary-btn" onClick={addLine}><Plus size={14}/>Add line to session</button>
           <button className="primary-btn" onClick={() => void queueGeneration()} disabled={busy || !!jobId}>
-            <Volume2 size={14}/>{busy ? "Queueing…" : "Generate dialogue WAVs"}
+            <Volume2 size={14}/>{busy ? "Queueing…" : "Generate dialogue audio"}
           </button>
         </div>
         {lines.length > 0 && <div style={{ marginTop: 18 }}>
@@ -224,7 +271,7 @@ export default function AudioPage() {
           <div className="project-list" style={{ marginTop: 8 }}>
             {lines.map((line, index) => <div className="project-row" key={line.id}>
               <div className="project-thumb"><Volume2 size={18}/></div>
-              <div className="project-info"><strong>{index + 1}. {line.speaker} · {VOICES.find((voice) => voice.id === line.voiceId)?.label}</strong><span>{line.text}</span></div>
+              <div className="project-info"><strong>{index + 1}. {line.speaker} · {voices.find((voice) => voice.id === line.voiceId)?.label || line.voiceId}</strong><span>{line.text}</span></div>
               <button className="icon-btn" aria-label="Remove dialogue line" onClick={() => setLines((current) => current.filter((item) => item.id !== line.id))}><Trash2 size={15}/></button>
             </div>)}
           </div>
@@ -255,8 +302,8 @@ export default function AudioPage() {
     </section>
 
     <div className="panel" style={{ marginTop: 18 }}>
-      <div className="panel-title">Current model limits</div>
-      <p className="panel-subtitle" style={{ marginTop: 8 }}>Kokoro provides preset voices, not voice cloning for Daniel, Grace, Lily, Michael or any real actor. Keep one voice ID assigned to each recurring fictional character. Emotional acting and prosody can vary between takes, so review each WAV. Music, sound effects, lip-sync and final mixing are separate stages.</p>
+      <div className="panel-title">Current speech-engine limits</div>
+      <p className="panel-subtitle" style={{ marginTop: 8 }}>Edge TTS is an online service that may be throttled and does not provide an unlimited-use guarantee. Kokoro is local and uses preset voices, not voice cloning. Keep one voice ID assigned to each recurring fictional character. Lily’s Edge preset is a youthful available voice, not a true child voice; review it carefully. Both engines need human review for emotion and timing. Lip-sync, music generation and sound-effect generation are separate stages.</p>
       <Link className="text-link" href="/production">Open production queue</Link>
     </div>
   </div>;

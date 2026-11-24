@@ -38,6 +38,7 @@ type Location = {
 };
 type ReferenceImage = { id: string; name: string; mime_type: string | null; drive_file_id: string | null; project_id: string | null };
 type Tab = "characters" | "locations";
+type BrandProduct = { id: string; name: string; description: string; placement_rule: string };
 
 const emptyCharacter = {
   name: "",
@@ -87,6 +88,7 @@ export default function CharactersPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [projectImages, setProjectImages] = useState<ReferenceImage[]>([]);
+  const [brandProducts, setBrandProducts] = useState<BrandProduct[]>([]);
   const [tab, setTab] = useState<Tab>("characters");
   const [characterForm, setCharacterForm] = useState(emptyCharacter);
   const [characterReferences, setCharacterReferences] = useState<string[]>([]);
@@ -104,22 +106,28 @@ export default function CharactersPage() {
       setCharacters([]);
       setLocations([]);
       setProjectImages([]);
+      setBrandProducts([]);
       return;
     }
-    const [characterResponse, locationResponse, assetResponse] = await Promise.all([
+    const [characterResponse, locationResponse, assetResponse, projectResponse] = await Promise.all([
       fetch(`/api/characters?projectId=${encodeURIComponent(id)}`, { cache: "no-store" }),
       fetch(`/api/locations?projectId=${encodeURIComponent(id)}`, { cache: "no-store" }),
       fetch(`/api/assets?projectId=${encodeURIComponent(id)}`, { cache: "no-store" }),
+      fetch(`/api/projects/${id}`, { cache: "no-store" }),
     ]);
-    const [characterData, locationData, assetData] = await Promise.all([
-      characterResponse.json(), locationResponse.json(), assetResponse.json(),
+    const [characterData, locationData, assetData, projectData] = await Promise.all([
+      characterResponse.json(), locationResponse.json(), assetResponse.json(), projectResponse.json(),
     ]);
     if (!characterResponse.ok) throw new Error(characterData.error || "Could not load characters.");
     if (!locationResponse.ok) throw new Error(locationData.error || "Could not load locations.");
     if (!assetResponse.ok) throw new Error(assetData.error || "Could not load project media.");
+    if (!projectResponse.ok) throw new Error(projectData.error || "Could not load project settings.");
     setCharacters(characterData.characters || []);
     setLocations(locationData.locations || []);
     setProjectImages((assetData.assets || []).filter((asset: ReferenceImage) => asset.mime_type?.startsWith("image/")));
+    const settings = projectData.project?.settings && typeof projectData.project.settings === "object" ? projectData.project.settings as Record<string, unknown> : {};
+    const bible = settings.nellwick_brand_bible && typeof settings.nellwick_brand_bible === "object" ? settings.nellwick_brand_bible as Record<string, unknown> : {};
+    setBrandProducts(Array.isArray(bible.products) ? bible.products as BrandProduct[] : []);
   }, []);
 
   const loadProjects = useCallback(async () => {
@@ -213,7 +221,7 @@ export default function CharactersPage() {
       canonical_description: characterForm.canonical_description.trim(),
       visual_traits,
       wardrobe: characterForm.wardrobe.split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
-      voice_profile: characterForm.voice.trim() ? { notes: characterForm.voice.trim() } : {},
+      voice_profile: { ...(editingCharacter ? (characters.find((item) => item.id === editingCharacter)?.voice_profile || {}) : {}), ...(characterForm.voice.trim() ? { notes: characterForm.voice.trim() } : {}) },
       reference_asset_ids: characterReferences,
       continuity_notes: characterForm.continuity_notes.trim(),
     };
@@ -286,13 +294,32 @@ export default function CharactersPage() {
 
   const selectedProject = projects.find((project) => project.id === projectId);
 
-  return (
+    async function initializeNellwickBible() {
+    if (!projectId) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${projectId}/initialize-brand-bible`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not initialize the NELLWICK brand bible.");
+      await loadRecords(projectId);
+      setNotice(`NELLWICK bible ready: ${data.created_characters} characters and ${data.created_locations} locations added; existing profiles were preserved.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not initialize the NELLWICK brand bible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+return (
     <div className="page-wrap">
       <PageHeading
         eyebrow="PROJECT BIBLE"
         title="Characters & worlds"
         subtitle="Build reusable character identities and location references that can guide visual continuity across scenes."
-        action={<button className="secondary-btn" type="button" onClick={() => void loadRecords(projectId)} disabled={!projectId || loading}><RefreshCw size={14}/> Refresh</button>}
+        action={<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="secondary-btn" type="button" onClick={() => void loadRecords(projectId)} disabled={!projectId || loading}><RefreshCw size={14}/> Refresh</button>
+          <button className="primary-btn" type="button" onClick={() => void initializeNellwickBible()} disabled={!projectId || busy || loading}><Users size={14}/> {busy ? "Preparing…" : "Initialize NELLWICK Bible"}</button>
+        </div>}
       />
 
       {error && <div className="notice" role="alert" style={{ marginBottom: 12 }}>{error}</div>}
@@ -316,6 +343,17 @@ export default function CharactersPage() {
           </select>
         </label>
       </section>
+
+      {projectId && brandProducts.length > 0 && <section className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-heading"><div><div className="panel-title">NELLWICK product vault</div><div className="panel-subtitle">Stored with this project&apos;s brand bible. Use real product photos/specifications as the visual and factual source of truth.</div></div><span className="pill">{brandProducts.length} products</span></div>
+        <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          {brandProducts.map((product) => <article className="panel" key={product.id}>
+            <div className="panel-title">{product.name}</div>
+            <p className="panel-subtitle" style={{ marginTop: 8 }}>{product.description}</p>
+            <p className="muted" style={{ marginTop: 8 }}>{product.placement_rule}</p>
+          </article>)}
+        </div>
+      </section>}
 
       {!projects.length && !loading ? (
         <div className="project-empty">

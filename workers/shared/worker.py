@@ -733,9 +733,30 @@ class NELLWICKWorker:
                 scene_total += scene_duration
             if len(scenes) < 4:
                 raise StudioError(f"Short {short_index} has fewer than four usable visual scenes.")
-            if scene_total != duration:
-                # Normalize the final scene duration so the storyboard has a precise target runtime.
-                scenes[-1]["duration_seconds"] = max(3, min(15, scenes[-1]["duration_seconds"] + duration - scene_total))
+            delta = duration - scene_total
+            # Distribute the duration correction across scenes without exceeding per-scene bounds.
+            while delta > 0:
+                candidates = [item for item in scenes if item["duration_seconds"] < 15]
+                if not candidates:
+                    break
+                for item in candidates:
+                    if delta <= 0:
+                        break
+                    step = min(15 - item["duration_seconds"], delta)
+                    item["duration_seconds"] += step
+                    delta -= step
+            while delta < 0:
+                candidates = [item for item in scenes if item["duration_seconds"] > 3]
+                if not candidates:
+                    break
+                for item in candidates:
+                    if delta >= 0:
+                        break
+                    step = min(item["duration_seconds"] - 3, -delta)
+                    item["duration_seconds"] -= step
+                    delta += step
+            if delta != 0:
+                raise StudioError(f"Short {short_index} scene durations cannot be normalized to {duration} seconds.")
             character_names = []
             for name in short.get("characters", [])[:8] if isinstance(short.get("characters"), list) else []:
                 clean_name = str(name).strip()

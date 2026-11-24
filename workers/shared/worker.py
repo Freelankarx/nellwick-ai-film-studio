@@ -191,21 +191,22 @@ class NELLWICKWorker:
                 "Use a T4 16 GB or higher GPU for this first benchmark."
             )
         print(f"Loading {SDXL_MODEL_ID} in FP16. First use downloads the SDXL model weights.")
-        self.image_pipe = StableDiffusionXLPipeline.from_pretrained(
+        pipe = StableDiffusionXLPipeline.from_pretrained(
             SDXL_MODEL_ID,
             torch_dtype=torch.float16,
             variant="fp16",
             use_safetensors=True,
         )
         # T4-friendly memory policy: move only active modules to GPU.
-        self.image_pipe.enable_model_cpu_offload()
-        if hasattr(self.image_pipe, "enable_vae_slicing"):
-            self.image_pipe.enable_vae_slicing()
-        if hasattr(self.image_pipe, "enable_vae_tiling"):
-            self.image_pipe.enable_vae_tiling()
-        if hasattr(self.image_pipe, "enable_attention_slicing"):
-            self.image_pipe.enable_attention_slicing("max")
-        self.image_pipe.set_progress_bar_config(disable=False)
+        pipe.enable_model_cpu_offload()
+        if hasattr(pipe, "enable_vae_slicing"):
+            pipe.enable_vae_slicing()
+        if hasattr(pipe, "enable_vae_tiling"):
+            pipe.enable_vae_tiling()
+        if hasattr(pipe, "enable_attention_slicing"):
+            pipe.enable_attention_slicing("max")
+        pipe.set_progress_bar_config(disable=False)
+        self.image_pipe = pipe
         print(f"SDXL ready on {props.name} ({memory_gib:.1f} GiB). CPU offload is enabled.")
 
     def project_reference_folder(self, manifest: dict) -> str:
@@ -628,10 +629,14 @@ class NELLWICKWorker:
         self.unload_qwen()
         self.update_progress(job_id, 4, "Preparing SDXL reference-image model")
         self.load_sdxl()
-        work_dir = Path(tempfile.mkdtemp(prefix="nellwick_reference_"))
-        reference_folder = self.project_reference_folder(manifest)
-        assets = []
-        seed_base = int(settings.get("seed") or int(time.time()) % 2**31)
+        try:
+            work_dir = Path(tempfile.mkdtemp(prefix="nellwick_reference_"))
+            reference_folder = self.project_reference_folder(manifest)
+            assets = []
+            seed_base = int(settings.get("seed") or int(time.time()) % 2**31)
+        except Exception:
+            self.unload_sdxl()
+            raise
 
         try:
             for index in range(1, variants + 1):

@@ -339,7 +339,7 @@ export default function AudioPage() {
         </label>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
           <button className="secondary-btn" onClick={addLine}><Plus size={14}/>Add line to session</button>
-          <button className="primary-btn" onClick={() => void queueGeneration()} disabled={busy || !!jobId}>
+          <button className="primary-btn" onClick={() => void queueGeneration()} disabled={busy || !!jobId || !!lipSyncJobId}>
             <Volume2 size={14}/>{busy ? "Queueing…" : "Generate dialogue audio"}
           </button>
         </div>
@@ -369,7 +369,7 @@ export default function AudioPage() {
         <span className="pill">MuseTalk 1.5 · Kaggle GPU</span>
       </div>
       <div className="notice" style={{ marginTop: 12 }}>
-        Use one clear, front-facing portrait and a short English dialogue line (maximum 60 seconds). This creates a talking close-up from one still image. It does not animate the character&apos;s body or guarantee perfect identity preservation. The first job installs a separate Python 3.10 environment and downloads several model weights; later jobs in the same Kaggle session can reuse them. Review MuseTalk&apos;s training-data commercialisation notice before using generated output in monetized publishing.
+        Use one clear, front-facing portrait and a short English dialogue line (maximum 60 seconds). This creates a talking close-up from one still image. It does not animate the character&apos;s body or guarantee perfect identity preservation. The first job installs a separate Python 3.10 environment and downloads several model weights; later jobs in the same Kaggle session can reuse them. Use a single-person, front-facing portrait. This worker caps each shot at 60 seconds. Review MuseTalk&apos;s training-data commercialisation notice before using generated output in monetized publishing.
       </div>
       <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 14 }}>
         <label className="field-label">Character (optional)

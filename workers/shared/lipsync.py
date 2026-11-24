@@ -228,16 +228,21 @@ def process_musetalk_lip_sync_job(worker: Any, job: dict[str, Any]) -> None:
     _download_models(worker, job_id, repo_dir, python)
 
     portrait_path = work_dir / "character_portrait.png"
-    audio_suffix = Path(str(audio.get("name") or "dialogue.wav")).suffix.lower()
+    audio_suffix = Path(str(audio.get("name") or "dialogue")).suffix.lower()
     if audio_suffix not in {".wav", ".mp3", ".m4a", ".flac"}:
-        audio_suffix = ".wav"
+        audio_suffix = ".mp3" if audio.get("mime_type") == "audio/mpeg" else ".wav"
     audio_path = work_dir / f"dialogue{audio_suffix}"
     worker.update_progress(job_id, 40, "Downloading approved character portrait and dialogue audio")
     worker.download_drive_file(str(source["drive_file_id"]), portrait_path)
     worker.download_drive_file(str(audio["drive_file_id"]), audio_path)
+    from PIL import Image
+    normalized_portrait = work_dir / "character_portrait_normalized.png"
+    with Image.open(portrait_path) as opened:
+        opened.convert("RGB").save(normalized_portrait, format="PNG", optimize=True)
+    portrait_path = normalized_portrait
     duration = _audio_duration(audio_path)
-    if duration < 0.8 or duration > 180:
-        raise RuntimeError("MuseTalk lip-sync duration must be between 0.8 and 180 seconds.")
+    if duration < 0.8 or duration > 60:
+        raise RuntimeError("MuseTalk talking-character shots must be between 0.8 and 60 seconds. Use it for individual dialogue shots, not an entire episode.")
 
     source_video = work_dir / "still_portrait_source.mp4"
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()

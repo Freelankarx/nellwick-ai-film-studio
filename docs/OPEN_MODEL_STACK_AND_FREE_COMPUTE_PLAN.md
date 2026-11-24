@@ -110,3 +110,15 @@ The worker has an experimental LTX-Video 0.9.6 distilled Diffusers adapter. It d
 - MuseTalk animates face/mouth only. Full body action, character-to-character interaction and sustained camera/actor motion still depend on image-to-video/video models and have not been solved by lip-sync.
 - Music generation, sound-effect generation, face-aware 9:16 reframing, advanced transitions, colour grading and automatic episode-level orchestration are still future production stages.
 - A successful code build and job queue are not the same as a verified, watchable episode. The acceptance test is a short scene with consistent character appearance, usable lip motion, clear voice, music/ambience and a finished edited MP4.
+
+
+## Stage 9 — Daily three-Shorts showrunner
+
+- Adds an authenticated project/episode-scoped endpoint `/api/director/plan-shorts`.
+- The existing local Qwen planner receives the saved NELLWICK character bible, locations, product guidance, style and a user brief.
+- It returns exactly three distinct vertical 9:16 creative blueprints, each 35–55 seconds, including title, opening hook, concept, script, cast, recurring location, optional product use, caption, thumbnail text, CTA and 4–7 continuous-action scene prompts with camera direction, dialogue/voiceover and sound design.
+- The worker validates character, speaker, location and product references against the supplied project bible and normalizes scene durations to the stated short runtime.
+- The authenticated worker completion endpoint stores generated plans in the selected episode's `production_manifest.short_blueprints` array and completes the production job.
+- The Shorts workspace now has a Daily 3-Shorts Showrunner, queue progress and a saved script/shot-prompt library with copy actions.
+- This stage creates *creative blueprints*, not finished video files. The user still generates/approves the visual and voice assets and assembles them in Film Editor. Do not represent the planner as automatic finished-video production.
+- No schema migration required; it reuses the existing project/episode, production_jobs and episode production_manifest.

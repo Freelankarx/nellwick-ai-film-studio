@@ -10,9 +10,10 @@ import { formatBytes, formatDate } from "@/lib/utils";
 type Project = { id: string; name: string };
 type Episode = { id: string; title: string };
 type AudioAsset = { id: string; name: string; mime_type: string | null; file_size: number | null; drive_file_id: string | null; created_at: string; source_type: string };
+type ReferenceAsset = { id: string; name: string; mime_type: string | null; drive_file_id: string | null };
 type VoiceLine = { id: string; speaker: string; voiceId: string; text: string; speed: number };
 type AudioEngine = "kokoro" | "edge-tts";
-type CastVoice = { id: string; name: string; voice_profile?: Record<string, string> | null };
+type CastVoice = { id: string; name: string; voice_profile?: Record<string, string> | null; reference_asset_ids?: string[] | null };
 
 const KOKORO_VOICES = [
   { id: "af_heart", label: "Heart · American female" },
@@ -38,6 +39,7 @@ const EDGE_VOICES = [
 
 export default function AudioPage() {
   const [assets, setAssets] = useState<AudioAsset[]>([]);
+  const [referenceAssets, setReferenceAssets] = useState<ReferenceAsset[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [cast, setCast] = useState<CastVoice[]>([]);
@@ -47,6 +49,8 @@ export default function AudioPage() {
   const [engine, setEngine] = useState<AudioEngine>("kokoro");
   const [voiceId, setVoiceId] = useState("af_heart");
   const voices = engine === "edge-tts" ? EDGE_VOICES : KOKORO_VOICES;
+  const lipSyncCharacter = cast.find((item) => item.id === lipSyncCharacterId);
+  const lipSyncPortraits = referenceAssets.filter((asset) => !lipSyncCharacter?.reference_asset_ids?.length || lipSyncCharacter.reference_asset_ids.includes(asset.id));
   const [text, setText] = useState("");
   const [speed, setSpeed] = useState(1);
   const [lines, setLines] = useState<VoiceLine[]>([]);
@@ -57,12 +61,21 @@ export default function AudioPage() {
   const [jobProgress, setJobProgress] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [lipSyncCharacterId, setLipSyncCharacterId] = useState("");
+  const [lipSyncPortraitId, setLipSyncPortraitId] = useState("");
+  const [lipSyncAudioId, setLipSyncAudioId] = useState("");
+  const [lipSyncJobId, setLipSyncJobId] = useState("");
+  const [lipSyncStatus, setLipSyncStatus] = useState("");
+  const [lipSyncProgress, setLipSyncProgress] = useState(0);
 
-  const loadAssets = useCallback(async () => {
-    const response = await fetch("/api/assets", { cache: "no-store" });
+  const loadAssets = useCallback(async (project?: string) => {
+    const path = project ? "/api/assets?projectId=" + encodeURIComponent(project) : "/api/assets";
+    const response = await fetch(path, { cache: "no-store" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load audio assets.");
-    setAssets((data.assets || []).filter((asset: AudioAsset) => asset.mime_type?.startsWith("audio/")));
+    const allAssets: AudioAsset[] = data.assets || [];
+    setAssets(allAssets.filter((asset) => asset.mime_type?.startsWith("audio/")));
+    setReferenceAssets(allAssets.filter((asset) => asset.mime_type?.startsWith("image/") && asset.drive_file_id));
   }, []);
 
   const loadProjects = useCallback(async () => {
@@ -89,7 +102,8 @@ export default function AudioPage() {
   }, [loadAssets, loadProjects]);
 
   useEffect(() => {
-    if (!projectId) { setEpisodes([]); setEpisodeId(""); return; }
+    if (!projectId) { setEpisodes([]); setEpisodeId(""); setReferenceAssets([]); return; }
+    void loadAssets(projectId).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load project assets."));
     let active = true;
     fetch("/api/projects/" + projectId, { cache: "no-store" })
       .then(async (response) => {
@@ -116,7 +130,7 @@ export default function AudioPage() {
       })
       .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : "Could not load character voice profiles."); });
     return () => { active = false; };
-  }, [projectId]);
+  }, [projectId, loadAssets]);
   useEffect(() => {
     if (!jobId) return;
     let active = true;
@@ -208,8 +222,8 @@ export default function AudioPage() {
       title="Voice & audio"
       subtitle="Generate character dialogue and narration with optional online Edge voices or local Kokoro, then manage the audio and subtitle files stored in your connected Google Drive."
       action={<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="secondary-btn" onClick={() => void loadAssets()}><RefreshCw size={14}/>Refresh</button>
-        <UploadMediaButton onUploaded={() => void loadAssets()}/>
+        <button className="secondary-btn" onClick={() => void loadAssets(projectId)}><RefreshCw size={14}/>Refresh</button>
+        <UploadMediaButton onUploaded={() => void loadAssets(projectId)}/>
       </div>}
     />
 

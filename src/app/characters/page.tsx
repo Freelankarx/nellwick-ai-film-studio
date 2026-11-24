@@ -377,7 +377,7 @@ export default function CharactersPage() {
                         "No text, no labels, no typography, no watermark, no logos, no extra people.",
                         "Character identity: " + characterForm.canonical_description,
                         "Age range: " + characterForm.age_range + ". Skin tone: " + characterForm.skin_tone + ". Hair: " + characterForm.hair + ". Eyes: " + characterForm.eyes + ". Build: " + characterForm.build + ". Facial features: " + characterForm.facial_features + ". Signature details: " + characterForm.signature_details + ".",
-                        "Wardrobe: " + characterForm.wardrobe.split(/\\r?\\n/).filter(Boolean).join("; ") + ". Colour palette: " + characterForm.colour_palette + ".",
+                        "Wardrobe: " + characterForm.wardrobe.split(/\r?\n/).filter(Boolean).join("; ") + ". Colour palette: " + characterForm.colour_palette + ".",
                       ].filter(Boolean).join(" ")
                     } : undefined}
                   />

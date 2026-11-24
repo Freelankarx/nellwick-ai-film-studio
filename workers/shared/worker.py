@@ -8,6 +8,7 @@ import requests
 
 CHUNK_SIZE = 8 * 1024 * 1024
 WAN_MODEL_ID = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+LTX_I2V_MODEL_ID = "Lightricks/LTX-Video-0.9.6-distilled"
 SDXL_MODEL_ID = "stabilityai/stable-diffusion-xl-base-1.0"
 QWEN3_4B_MODEL_ID = "Qwen/Qwen3-4B"
 QWEN3_1_7B_MODEL_ID = "Qwen/Qwen3-1.7B"
@@ -31,6 +32,7 @@ class NELLWICKWorker:
         self.root_folder_id = None
         self.pipe = None
         self.image_pipe = None
+        self.ltx_pipe = None
         self.ffmpeg = None
         self.qwen_model = None
         self.qwen_tokenizer = None
@@ -166,6 +168,77 @@ class NELLWICKWorker:
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+
+    def unload_ltx(self):
+        if self.ltx_pipe is None:
+            return
+        import gc
+        import torch
+        self.ltx_pipe = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    def load_ltx(self):
+        if self.ltx_pipe is not None:
+            return
+        import torch
+        from diffusers import LTXImageToVideoPipeline
+        props = torch.cuda.get_device_properties(0)
+        memory_gib = props.total_memory / (1024 ** 3)
+        if memory_gib < 12:
+            raise StudioError("LTX image-to-video is experimental and requires a single GPU with at least 12 GiB VRAM. Use a T4 16 GB or better GPU; separate GPUs are not combined.")
+        print(f"Loading experimental LTX image-to-video model {LTX_I2V_MODEL_ID} in FP16. This first download is several GB.")
+        pipe = LTXImageToVideoPipeline.from_pretrained(LTX_I2V_MODEL_ID, torch_dtype=torch.float16, use_safetensors=True)
+        pipe.enable_model_cpu_offload()
+        if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
+            pipe.vae.enable_tiling()
+        if hasattr(pipe, "enable_attention_slicing"):
+            pipe.enable_attention_slicing("max")
+        pipe.set_progress_bar_config(disable=False)
+        self.ltx_pipe = pipe
+        print(f"LTX pipeline loaded on {props.name} ({memory_gib:.1f} GiB). This adapter still needs a live T4 benchmark.")
+
+    def generate_ltx_i2v_shot(self, shot: dict, image_path: Path, output_path: Path, settings: dict):
+        import torch
+        from PIL import Image
+        from diffusers.utils import export_to_video
+        self.load_ltx()
+        with Image.open(image_path) as source:
+            image = source.convert("RGB")
+        ratio = str(shot.get("aspect_ratio") or "16:9")
+        width, height = (480, 704) if ratio == "9:16" else ((576, 576) if ratio == "1:1" else (704, 480))
+        image.thumbnail((width, height), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGB", (width, height), (16, 16, 16))
+        canvas.paste(image, ((width - image.width) // 2, (height - image.height) // 2))
+        seconds = max(2, min(5, int(shot.get("duration_seconds", 3))))
+        fps = 12
+        frames = 8 * seconds + 1
+        prompt = str(shot.get("prompt") or "").strip()
+        if len(prompt) < 10:
+            raise StudioError("LTX image-to-video shot needs a detailed motion and camera prompt.")
+        generator = torch.Generator(device="cpu").manual_seed(int(shot.get("seed") or int(time.time()) % 2**31))
+        def cancellation_checkpoint(_pipeline, _step_index, _timestep, callback_kwargs):
+            self.raise_if_cancelled()
+            return callback_kwargs
+        self.raise_if_cancelled()
+        result = self.ltx_pipe(
+            image=canvas, prompt=prompt,
+            negative_prompt=str(shot.get("negative_prompt") or "blurry, flicker, jitter, morphing face, changing identity, distorted anatomy, text, watermark"),
+            width=width, height=height, num_frames=frames, num_inference_steps=8,
+            guidance_scale=1.0, generator=generator,
+            callback_on_step_end=cancellation_checkpoint,
+        )
+        self.raise_if_cancelled()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        export_to_video(result.frames[0], str(output_path), fps=fps)
+        if not output_path.exists() or output_path.stat().st_size < 1024:
+            raise StudioError("LTX did not produce a valid MP4 file.")
+        import imageio_ffmpeg
+        validation = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-i", str(output_path), "-map", "0:v:0", "-f", "null", "-"], capture_output=True, text=True, timeout=120)
+        if validation.returncode != 0:
+            raise StudioError("LTX MP4 failed FFmpeg validation: " + validation.stderr[-1000:])
 
     def unload_sdxl(self):
         if self.image_pipe is None:
@@ -720,9 +793,11 @@ class NELLWICKWorker:
         manifest = job.get("manifest") or {}
         task = manifest.get("task", "video_generation")
         if task == "image_generation":
+            self.unload_ltx()
             self.process_image_generation_job(job)
             return
         if task == "audio_generation":
+            self.unload_ltx()
             self.unload_wan()
             self.unload_qwen()
             self.unload_sdxl()
@@ -730,6 +805,7 @@ class NELLWICKWorker:
             process_kokoro_audio_job(self, job)
             return
         if task in ("story_plan", "shot_plan"):
+            self.unload_ltx()
             # A previous video job in the same notebook session may leave Wan allocated.
             self.unload_wan()
             try:
@@ -765,11 +841,21 @@ class NELLWICKWorker:
                 continue
             mode = shot.get("generation_mode", "text_to_video")
             model_id = shot.get("model_id", manifest.get("settings", {}).get("model_id", "wan21-t2v-1.3b"))
-            if model_id != "wan21-t2v-1.3b" or mode != "text_to_video":
-                raise StudioError(f"The first notebook adapter only runs Wan 2.1 T2V 1.3B text-to-video. Job requested model={model_id}, mode={mode}.")
             progress_base = ((index - 1) / total) * 85
             self.update_progress(job_id, progress_base + 1, f"Generating shot {index}/{total}")
-            self.generate_wan_shot(shot, local, manifest.get("settings", {}))
+            if mode == "image_to_video" and model_id == "ltx-video-0.9.6-i2v":
+                source_id = shot.get("source_drive_file_id")
+                if not source_id:
+                    raise StudioError(f"Shot {shot.get('shot_number', index)} has no validated source image in its job manifest.")
+                source_path = work_dir / f"shot_{index:03d}_source.png"
+                self.download_drive_file(source_id, source_path)
+                self.unload_wan()
+                self.generate_ltx_i2v_shot(shot, source_path, local, manifest.get("settings", {}))
+            elif mode == "text_to_video" and model_id == "wan21-t2v-1.3b":
+                self.unload_ltx()
+                self.generate_wan_shot(shot, local, manifest.get("settings", {}))
+            else:
+                raise StudioError(f"Unsupported shot adapter: model={model_id}, mode={mode}.")
             self.raise_if_cancelled()
             self.update_progress(job_id, progress_base + 6, f"Uploading shot {index}/{total} to Google Drive")
             file_info = self.upload_resumable(local, shots_folder)

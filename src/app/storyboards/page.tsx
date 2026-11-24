@@ -9,12 +9,14 @@ type StoryboardShot = { id: string; status: string; prompt: string; model_id: st
 
 type Project = { id: string; name: string };
 type Episode = { id: string; title: string; aspect_ratio: string };
-type Shot = { id: string; scene_id: string; shot_number: number; prompt: string; negative_prompt: string; action_description: string; duration_seconds: number; aspect_ratio: string; model_id: string; generation_mode: string; status: string };
+type Shot = { id: string; scene_id: string; shot_number: number; prompt: string; negative_prompt: string; action_description: string; duration_seconds: number; aspect_ratio: string; model_id: string; generation_mode: string; generation_settings: Record<string, unknown> | null; status: string };
+type ReferenceAsset = { id: string; name: string; mime_type: string | null; drive_file_id: string | null };
 type Scene = { id: string; episode_id: string; scene_number: number; title: string; summary: string; continuity_notes: string; location_id: string | null; shots: Shot[] };
 
 export default function StoryboardsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [referenceAssets, setReferenceAssets] = useState<ReferenceAsset[]>([]);
   const [projectId, setProjectId] = useState("");
   const [episodeId, setEpisodeId] = useState("");
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -41,7 +43,7 @@ export default function StoryboardsPage() {
       return { ...scene, shots: shotData.shots || [] };
     }));
     setScenes(loaded);
-    setSelectedShots(loaded.flatMap((scene) => (scene.shots as StoryboardShot[]).filter((shot) => shot.status === "draft" && shot.prompt.trim().length >= 10 && shot.model_id === "wan21-t2v-1.3b" && shot.generation_mode === "text_to_video" && shot.duration_seconds >= 2 && shot.duration_seconds <= 5).map((shot) => shot.id)));
+    setSelectedShots(loaded.flatMap((scene) => (scene.shots as Shot[]).filter((shot) => shot.status === "draft" && shot.prompt.trim().length >= 10 && shot.duration_seconds >= 2 && shot.duration_seconds <= 5 && ((shot.model_id === "wan21-t2v-1.3b" && shot.generation_mode === "text_to_video") || (shot.model_id === "ltx-video-0.9.6-i2v" && shot.generation_mode === "image_to_video" && typeof shot.generation_settings?.source_asset_id === "string"))).map((shot) => shot.id)));
   }, []);
 
   useEffect(() => {
@@ -81,6 +83,12 @@ export default function StoryboardsPage() {
     return () => { active = false; };
   }, [projectId]);
 
+  useEffect(() => {
+    if (!projectId) { setReferenceAssets([]); return; }
+    fetch(`/api/assets?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" })
+      .then(async (response) => { const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load reference images."); setReferenceAssets((data.assets || []).filter((asset: ReferenceAsset) => asset.mime_type?.startsWith("image/") && asset.drive_file_id)); })
+      .catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load reference images."));
+  }, [projectId]);
   useEffect(() => { void loadScenes(episodeId).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load storyboard.")); }, [episodeId, loadScenes]);
   useEffect(() => {
     if (!planningJobId) return;
@@ -112,7 +120,7 @@ export default function StoryboardsPage() {
     return () => { active = false; window.clearInterval(timer); };
   }, [planningJobId, episodeId, loadScenes]);
   const allShots = useMemo(() => scenes.flatMap((scene) => scene.shots), [scenes]);
-  const queueableShots = allShots.filter((shot) => shot.prompt.trim().length >= 10 && shot.status !== "queued" && shot.status !== "processing" && shot.model_id === "wan21-t2v-1.3b" && shot.generation_mode === "text_to_video" && shot.duration_seconds >= 2 && shot.duration_seconds <= 5);
+  const queueableShots = allShots.filter((shot) => shot.prompt.trim().length >= 10 && shot.status !== "queued" && shot.status !== "processing" && shot.duration_seconds >= 2 && shot.duration_seconds <= 5 && ((shot.model_id === "wan21-t2v-1.3b" && shot.generation_mode === "text_to_video") || (shot.model_id === "ltx-video-0.9.6-i2v" && shot.generation_mode === "image_to_video" && typeof shot.generation_settings?.source_asset_id === "string")));
 
   async function createScene(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!episodeId) return;
@@ -158,7 +166,7 @@ export default function StoryboardsPage() {
     const formData = new FormData(form);
     setBusy(true); setError("");
     try {
-      const response = await fetch(`/api/shots/${shot.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: String(formData.get("prompt") || ""), negative_prompt: String(formData.get("negative_prompt") || ""), action_description: String(formData.get("action_description") || ""), duration_seconds: Number(formData.get("duration_seconds") || 5) }) });
+      const response = await fetch(`/api/shots/${shot.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: String(formData.get("prompt") || ""), negative_prompt: String(formData.get("negative_prompt") || ""), action_description: String(formData.get("action_description") || ""), duration_seconds: Number(formData.get("duration_seconds") || 5), generation_mode: String(formData.get("generation_mode") || "text_to_video"), model_id: String(formData.get("generation_mode") || "text_to_video") === "image_to_video" ? "ltx-video-0.9.6-i2v" : "wan21-t2v-1.3b", generation_settings: { source_asset_id: String(formData.get("source_asset_id") || "") || null } }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not save shot.");
       await loadScenes(episodeId); setNotice("Shot prompt saved.");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not save shot."); }
@@ -228,13 +236,15 @@ export default function StoryboardsPage() {
         <form onSubmit={createScene} className="form-grid" style={{ gridTemplateColumns: "1fr 2fr auto", alignItems: "end" }}><label className="field-label">Scene title<input className="field" value={sceneTitle} onChange={(event) => setSceneTitle(event.target.value)} placeholder="INT. STUDIO - NIGHT" required maxLength={200}/></label><label className="field-label">Summary<textarea className="field" rows={1} value={sceneSummary} onChange={(event) => setSceneSummary(event.target.value)} placeholder="What happens in this scene?"/></label><button className="primary-btn" disabled={busy}><Plus size={14}/>Add scene</button></form>
       </div>
       <div className="panel" style={{ marginBottom: 16 }}><div className="panel-heading"><div><div className="panel-title">Storyboard overview</div><div className="panel-subtitle">{scenes.length} scenes · {allShots.length} shots · {queueableShots.length} currently compatible with the installed video worker.</div></div><button className="primary-btn" onClick={() => void queueSelected()} disabled={busy || !selectedShots.length}><Send size={14}/>Queue selected ({selectedShots.length})</button></div>
-        <div className="notice">AI shot breakdowns are drafted by Qwen3 in the notebook. Review the prompts before queuing them. The current video adapter supports Wan 2.1 T2V 1.3B, text-to-video prompts and 2–5 second clips. Image-to-video and audio generation are not enabled yet.</div>
+        <div className="notice">AI shot breakdowns are drafted by Qwen3 in the notebook. Review the prompts before queuing them. Video options: Wan 2.1 text-to-video, or experimental LTX image-to-video using an image already in this project Media Library. LTX is not yet benchmarked on your Kaggle GPU; start with one short test shot.</div>
         {planningJobId && <div className="notice" style={{ marginTop: 10 }}>AI shot planning is queued or processing for {scenes.find((scene) => scene.id === planningSceneId)?.title || "this scene"}. <Link className="text-link" href="/production">View production queue</Link></div>}
       </div>
       {scenes.length ? <div className="form-grid">{scenes.map((scene) => <section className="panel" key={scene.id}>
         <div className="panel-heading"><div><div className="eyebrow">SCENE {String(scene.scene_number).padStart(2, "0")}</div><div className="panel-title">{scene.title || `Scene ${scene.scene_number}`}</div><div className="panel-subtitle">{scene.summary || "No scene summary yet."}</div></div><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><button className="secondary-btn" onClick={() => void generateShotPlan(scene)} disabled={busy || !!planningJobId}><Sparkles size={13}/>AI shot breakdown</button><button className="secondary-btn" onClick={() => void editScene(scene)} disabled={busy}>Edit</button><button className="danger-btn" onClick={() => void removeScene(scene)} disabled={busy}><Trash2 size={13}/></button><button className="primary-btn" onClick={() => void createShot(scene)} disabled={busy}><Plus size={13}/>Add shot</button></div></div>
         {scene.shots.length ? <div className="form-grid">{scene.shots.map((shot) => <form key={shot.id} className="panel" style={{ background: "rgba(255,255,255,.02)" }} onSubmit={(event) => { event.preventDefault(); void saveShot(shot, event.currentTarget); }}>
           <div className="panel-heading"><div><div className="panel-title">Shot {shot.shot_number}</div><div className="panel-subtitle">{shot.status} · {shot.duration_seconds}s · {shot.model_id}</div></div><label className="field-label" style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 6 }}><input type="checkbox" checked={selectedShots.includes(shot.id)} disabled={!queueableShots.some((item) => item.id === shot.id)} onChange={(event) => setSelectedShots((current) => event.target.checked ? [...current, shot.id] : current.filter((id) => id !== shot.id))}/>Queue</label></div>
+          <label className="field-label">Generation mode<select name="generation_mode" className="field" defaultValue={shot.generation_mode === "image_to_video" ? "image_to_video" : "text_to_video"}><option value="text_to_video">Wan 2.1 · Text to video</option><option value="image_to_video">LTX · Image to video (experimental)</option></select></label>
+          <label className="field-label">Starting reference image<select name="source_asset_id" className="field" defaultValue={String(shot.generation_settings?.source_asset_id || "")}><option value="">Choose a project image (required for LTX)</option>{referenceAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select><span className="muted">{referenceAssets.length} project images available. Upload or generate approved character images in the Characters workspace first.</span></label>
           <label className="field-label">Generation prompt<textarea name="prompt" className="field" rows={3} defaultValue={shot.prompt} placeholder="Describe framing, subject, environment, lighting, movement and visual style…" maxLength={4000}/></label>
           <label className="field-label">Action description<input name="action_description" className="field" defaultValue={shot.action_description || ""} placeholder="What happens during the shot?" maxLength={2000}/></label>
           <label className="field-label">Negative prompt<textarea name="negative_prompt" className="field" rows={2} defaultValue={shot.negative_prompt} maxLength={2000}/></label>

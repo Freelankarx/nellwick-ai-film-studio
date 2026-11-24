@@ -71,3 +71,12 @@ A visual prompt alone is not an identity lock.
 The four-hour daily schedule is an operator target, not a GPU guarantee. Kaggle/Colab availability, queue wait, model downloads and quotas vary. A long episode may span multiple worker sessions. Every task must save durable checkpoints and resume without regenerating finished shots.
 
 Prioritise one polished eight-minute episode and its cutdowns over a large batch of low-quality silent clips. Increase stretch targets only after the end-to-end quality test proves the workflow.
+
+
+## Stage 6 — Experimental LTX image-to-video integration (2026-11-24)
+
+The storyboard now supports selecting an existing project-owned image asset as a shot's first-frame reference. The authenticated shot-queue API validates that every selected source image belongs to the signed-in user's selected project and has a Google Drive file ID. It includes the source asset and Drive ID in the worker manifest; no public image URL or cross-project asset reference is accepted.
+
+The worker has an experimental LTX-Video 0.9.6 distilled Diffusers adapter. It downloads the selected image from the existing Google Drive integration, creates a short 2–5 second image-conditioned clip, validates the MP4 with FFmpeg, then follows the existing checkpoint/upload/asset registration path. Wan 2.1 remains the text-to-video fallback.
+
+**Important:** This code integration is not proof that LTX runs on a Kaggle T4. The upstream documentation commonly recommends BF16, while T4 does not provide native BF16. This adapter deliberately attempts FP16 with CPU offload as an experiment; model loading, dtype compatibility, peak VRAM, speed, output quality and commercial model licence must be checked before routine monetized use. If it fails, retain Wan T2V and use the exact Kaggle traceback to select a T4-compatible model/quantization route. Do not mark LTX production-ready without an actual GPU render.

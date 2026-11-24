@@ -130,7 +130,7 @@ export default function ProductionPage() {
 
       <div className="production-session-note">
         <div className="production-session-icon"><PauseCircle size={18}/></div>
-        <div><strong>Notebook processing is session-based</strong><p>Start Kaggle or Colab when you're ready to process queued work. Completed shots are checkpointed to Drive, so you can continue in another session. This page refreshes job status automatically.</p></div>
+        <div><strong>Notebook processing is session-based</strong><p>Start Kaggle or Colab when you&apos;re ready to process queued work. Completed shots are checkpointed to Drive, so you can continue in another session. This page refreshes job status automatically.</p></div>
       </div>
 
       {error && <div className="notice" role="alert" style={{ marginBottom: 14 }}>{error}</div>}

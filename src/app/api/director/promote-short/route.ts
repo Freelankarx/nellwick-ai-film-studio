@@ -3,6 +3,10 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import type { Database, Json } from "@/types/database";
 
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -91,12 +95,12 @@ export async function POST(request: Request) {
       source_episode_id: sourceEpisode.id,
       source_blueprint_id: parsed.data.shortId,
       short_hook: plan.hook,
-      short_cta: blueprint.cta ?? "",
-      short_caption: blueprint.caption ?? "",
-      short_thumbnail_text: blueprint.thumbnail_text ?? "",
-      short_product_used: blueprint.product_used ?? null,
+      short_cta: asString(blueprint.cta),
+      short_caption: asString(blueprint.caption),
+      short_thumbnail_text: asString(blueprint.thumbnail_text),
+      short_product_used: typeof blueprint.product_used === "string" ? blueprint.product_used : null,
       aspect_ratio: "9:16",
-    },
+    } as unknown as Json,
   }).select("id,title,project_id,aspect_ratio,status").single();
 
   if (createError || !newEpisode) {

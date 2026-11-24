@@ -6,3 +6,5 @@ sentencepiece
 imageio-ffmpeg
 requests
 Pillow>=10
+kokoro>=0.9.4,<1.0
+soundfile>=0.12

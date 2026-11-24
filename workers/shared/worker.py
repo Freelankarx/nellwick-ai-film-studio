@@ -676,6 +676,9 @@ class NELLWICKWorker:
         }
 
         cleaned_shorts = []
+        product_focus = str(brief.get("product_focus") or "natural")
+        focused_product = {"grooming_brush": "GROOMING_BRUSH", "hair_glove": "HAIR_GLOVE"}.get(product_focus)
+        product_already_used = False
         for short_index, short in enumerate(raw_shorts, start=1):
             if not isinstance(short, dict):
                 raise StudioError(f"Short {short_index} is not a valid object.")
@@ -767,8 +770,17 @@ class NELLWICKWorker:
             if location_name.casefold() not in allowed_locations:
                 location_name = next(iter(locations), {}).get("name", "") if locations else ""
             product_used = short.get("product_used")
+            if product_focus == "none":
+                product_used = None
+            elif product_focus in ("grooming_brush", "hair_glove"):
+                if product_used != focused_product:
+                    product_used = None
+            elif product_focus == "natural" and product_already_used:
+                product_used = None
             if product_used not in allowed_products:
                 product_used = None
+            if product_used:
+                product_already_used = True
 
             cleaned_shorts.append({
                 "title": title,

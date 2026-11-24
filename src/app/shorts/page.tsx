@@ -30,7 +30,6 @@ export default function ShortsPage() {
   const [plans, setPlans] = useState<ShortPlan[]>([]);
   const [busy, setBusy] = useState(false);
   const [renderJobId, setRenderJobId] = useState("");
-  const [renderPlanId, setRenderPlanId] = useState("");
   const [renderStatus, setRenderStatus] = useState("");
   const [renderProgress, setRenderProgress] = useState(0);
   const [error, setError] = useState("");
@@ -75,7 +74,7 @@ export default function ShortsPage() {
     return () => { active = false; };
   }, [projectId, loadEpisodes, loadAssets]);
 
-  useEffect(() => { setPlans(readPlans(episode?.production_manifest)); }, [episodeId, episode?.id]);
+  useEffect(() => { setPlans(readPlans(episode?.production_manifest)); }, [episodeId, episode?.id, episode?.production_manifest]);
 
   useEffect(() => {
     if (!renderJobId) return;
@@ -154,8 +153,8 @@ export default function ShortsPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not queue Short rendering.");
-      setRenderJobId(data.job.id); setRenderPlanId(plan.id); setRenderStatus("queued"); setRenderProgress(0);
-      setNotice("Short queued. The Kaggle worker will trim, center-crop and encode a 9:16 MP4 while retaining the source video's audio.");
+      setRenderJobId(data.job.id); setRenderStatus("queued"); setRenderProgress(0);
+      setNotice("Short queued. The Kaggle worker will trim, center-crop and encode a 9:16 MP4 while retaining the source video&apos;s audio.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not queue Short rendering.");
     } finally { setBusy(false); }
@@ -196,7 +195,7 @@ export default function ShortsPage() {
         {renderJobId && <div className="panel" style={{ marginTop: 12 }}><div className="panel-title">Rendering Short · {renderStatus} · {renderProgress}%</div><div style={{ height: 7, background: "var(--line)", borderRadius: 99, overflow: "hidden", marginTop: 10 }}><div style={{ width: renderProgress + "%", height: "100%", background: "var(--accent)" }}/></div></div>}
       </section>
     </div>}
-    <div className="notice" style={{ marginTop: 16 }}>The current Short renderer uses a centered 9:16 crop and retains the source video's audio. Face-aware auto-reframing, subtitle styling, music beds and automatic hook selection remain future improvements.</div>
+    <div className="notice" style={{ marginTop: 16 }}>The current Short renderer uses a centered 9:16 crop and retains the source video&apos;s audio. Face-aware auto-reframing, subtitle styling, music beds and automatic hook selection remain future improvements.</div>
     <Link className="text-link" href="/production">Open production queue</Link>
   </div>;
 }

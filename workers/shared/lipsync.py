@@ -116,8 +116,9 @@ def _ensure_environment(worker: Any, job_id: str) -> tuple[Path, Path, Path]:
         _run([
             str(python), "-c",
             "import torch,cv2,diffusers,transformers,mmcv,mmpose; "
+            "assert torch.cuda.is_available(), 'MuseTalk requires a Kaggle/Colab GPU runtime'; "
             "print('Python runtime imports OK'); "
-            "print('torch',torch.__version__,'cuda',torch.cuda.is_available()); "
+            "print('torch',torch.__version__,'cuda',torch.cuda.is_available(),torch.cuda.get_device_name(0)); "
             "print('mmcv',mmcv.__version__)",
         ], "Verifying isolated MuseTalk runtime", timeout=300)
         marker.write_text("ready\n", encoding="utf-8")

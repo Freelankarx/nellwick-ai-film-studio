@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   const parsedAudio = z.array(audioSchema).min(1).max(32).safeParse(editor.audio_tracks);
   if (!parsedAudio.success) return NextResponse.json({ error: "Add at least one dialogue, narration, music or sound-effects track before rendering. NELLWICK will not export a silent episode." }, { status: 400 });
 
-  const subtitleAssetId = parsed.data.subtitleAssetId || (typeof editor.subtitle_asset_id === "string" ? editor.subtitle_asset_id : null);
+  const subtitleAssetId = parsed.data.subtitleAssetId !== undefined ? parsed.data.subtitleAssetId : (typeof editor.subtitle_asset_id === "string" ? editor.subtitle_asset_id : null);
   const assetIds = [...new Set([
     ...parsedClips.data.map((item) => item.asset_id),
     ...parsedAudio.data.map((item) => item.asset_id),
@@ -69,25 +69,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "One or more timeline assets are missing from this project or have no Google Drive file." }, { status: 400 });
   }
 
+  const invalidClip = parsedClips.data.find((clip) => {
+    const asset = byId.get(clip.asset_id);
+    return !asset || (!asset.mime_type?.startsWith("video/") && !asset.mime_type?.startsWith("image/"));
+  });
+  if (invalidClip) return NextResponse.json({ error: "Every picture timeline item must be a video or image asset in this project." }, { status: 400 });
+  const invalidAudio = parsedAudio.data.find((track) => !byId.get(track.asset_id)?.mime_type?.startsWith("audio/"));
+  if (invalidAudio) return NextResponse.json({ error: "Every audio timeline item must be an audio asset in this project." }, { status: 400 });
   const clips = parsedClips.data.map((clip) => {
     const asset = byId.get(clip.asset_id)!;
-    if (!asset.mime_type?.startsWith("video/") && !asset.mime_type?.startsWith("image/")) {
-      throw new Error(`Timeline asset "${asset.name}" is not a video or image.`);
-    }
-    return {
-      ...clip,
-      name: asset.name,
-      mime_type: asset.mime_type,
-      drive_file_id: asset.drive_file_id,
-    };
+    return { ...clip, name: asset.name, mime_type: asset.mime_type, drive_file_id: asset.drive_file_id };
   });
   const audioTracks = parsedAudio.data.map((track) => {
     const asset = byId.get(track.asset_id)!;
-    if (!asset.mime_type?.startsWith("audio/")) {
-      throw new Error(`Audio track "${asset.name}" is not an audio asset.`);
-    }
     return { ...track, name: asset.name, mime_type: asset.mime_type, drive_file_id: asset.drive_file_id };
   });
+  const sortedClips = [...clips].sort((left, right) => left.start_seconds - right.start_seconds);
+  let cursor = 0;
+  for (const clip of sortedClips) {
+    if (clip.start_seconds < cursor - 0.05) return NextResponse.json({ error: "Picture clips cannot overlap in this renderer yet. Move the clips so their start positions follow the previous clip." }, { status: 400 });
+    cursor = clip.start_seconds + clip.duration_seconds;
+  }
   let subtitle: Record<string, unknown> | null = null;
   if (subtitleAssetId) {
     const asset = byId.get(subtitleAssetId)!;
@@ -97,7 +99,7 @@ export async function POST(request: Request) {
     subtitle = { id: asset.id, name: asset.name, drive_file_id: asset.drive_file_id };
   }
 
-  const totalDuration = clips.reduce((sum, clip) => sum + clip.duration_seconds, 0);
+  const totalDuration = clips.reduce((end, clip) => Math.max(end, clip.start_seconds + clip.duration_seconds), 0);
   const manifest: Json = {
     schema_version: "1.0.0",
     task: "episode_render",

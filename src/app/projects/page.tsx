@@ -14,7 +14,7 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-import { PageHeading, EmptyState } from "@/components/ui";
+import { PageHeading } from "@/components/ui";
 
 type Project = {
   id: string;

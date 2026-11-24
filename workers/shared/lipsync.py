@@ -191,19 +191,30 @@ snapshot_download(
         raise RuntimeError("MuseTalk model download is incomplete: " + ", ".join(missing))
 
 
+def validate_talking_shot_duration(seconds: float) -> float:
+    """MuseTalk jobs are individual dialogue shots, not full episode dubbing."""
+    value = float(seconds)
+    if value < 0.8 or value > 60:
+        raise ValueError("MuseTalk talking-character shots must be between 0.8 and 60 seconds.")
+    return value
+
+
 def _audio_duration(audio_path: Path) -> float:
+    try:
+        with wave.open(str(audio_path), "rb") as wav:
+            seconds = wav.getnframes() / float(wav.getframerate())
+            if seconds > 0:
+                return seconds
+    except Exception:
+        pass
     try:
         from mutagen import File as MutagenFile
         item = MutagenFile(str(audio_path))
         if item and item.info and float(item.info.length) > 0:
             return float(item.info.length)
-    except Exception:
-        pass
-    try:
-        with wave.open(str(audio_path), "rb") as wav:
-            return wav.getnframes() / float(wav.getframerate())
     except Exception as exc:
         raise RuntimeError("Could not read the dialogue audio duration. Use MP3 or WAV audio.") from exc
+    raise RuntimeError("Could not read a positive duration from the dialogue audio.")
 
 
 def process_musetalk_lip_sync_job(worker: Any, job: dict[str, Any]) -> None:
@@ -242,8 +253,10 @@ def process_musetalk_lip_sync_job(worker: Any, job: dict[str, Any]) -> None:
         opened.convert("RGB").save(normalized_portrait, format="PNG", optimize=True)
     portrait_path = normalized_portrait
     duration = _audio_duration(audio_path)
-    if duration < 0.8 or duration > 60:
-        raise RuntimeError("MuseTalk talking-character shots must be between 0.8 and 60 seconds. Use it for individual dialogue shots, not an entire episode.")
+    try:
+        duration = validate_talking_shot_duration(duration)
+    except ValueError as exc:
+        raise RuntimeError(str(exc) + " Use it for individual dialogue shots, not an entire episode.") from exc
 
     source_video = work_dir / "still_portrait_source.mp4"
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import type { Database } from "@/types/database";
 
-type SelectedShot = Pick<Database["public"]["Tables"]["shots"]["Row"], "id" | "scene_id" | "shot_number" | "prompt" | "negative_prompt" | "duration_seconds" | "aspect_ratio" | "generation_mode" | "model_id" | "status" | "action_description">;
+type SelectedShot = Pick<Database["public"]["Tables"]["shots"]["Row"], "id" | "scene_id" | "shot_number" | "prompt" | "negative_prompt" | "duration_seconds" | "aspect_ratio" | "generation_mode" | "model_id" | "status" | "action_description" | "generation_settings">;
 type SelectedScene = Pick<Database["public"]["Tables"]["scenes"]["Row"], "id" | "scene_number" | "episode_id">;
 
 const schema = z.object({
@@ -38,8 +38,22 @@ export async function POST(request: Request) {
   const shotById = new Map<string, SelectedShot>(shotRows.map((shot) => [shot.id, shot]));
   const sceneById = new Map<string, SelectedScene>(sceneRows.map((scene) => [scene.id, scene]));
   const ordered = uniqueIds.map((id) => shotById.get(id)!);
-  const invalid = ordered.find((shot) => shot.prompt.trim().length < 10 || shot.prompt.length > 4000 || shot.generation_mode !== "text_to_video" || shot.model_id !== "wan21-t2v-1.3b" || Number(shot.duration_seconds) < 2 || Number(shot.duration_seconds) > 5);
-  if (invalid) return NextResponse.json({ error: `Shot ${invalid.shot_number} is not compatible with the current Wan 2.1 T2V 1.3B worker. Use a prompt of at least 10 characters, text-to-video mode, and 2–5 seconds.` }, { status: 400 });
+  const invalid = ordered.find((shot) => shot.prompt.trim().length < 10 || shot.prompt.length > 4000 || !((shot.generation_mode === "text_to_video" && shot.model_id === "wan21-t2v-1.3b") || (shot.generation_mode === "image_to_video" && shot.model_id === "ltx-video-0.9.6-i2v")) || Number(shot.duration_seconds) < 2 || Number(shot.duration_seconds) > 5);
+  if (invalid) return NextResponse.json({ error: `Shot ${invalid.shot_number} has an unsupported model/mode, an incomplete prompt, or an invalid duration. Use Wan text-to-video or LTX image-to-video with 2–5 second clips.` }, { status: 400 });
+  const imageToVideoShots = ordered.filter((shot) => shot.generation_mode === "image_to_video");
+  const sourceIds = imageToVideoShots.map((shot) => {
+    const settings = shot.generation_settings && typeof shot.generation_settings === "object" && !Array.isArray(shot.generation_settings) ? shot.generation_settings as Record<string, unknown> : {};
+    return typeof settings.source_asset_id === "string" ? settings.source_asset_id : "";
+  });
+  if (sourceIds.some((id) => !id)) return NextResponse.json({ error: "Every LTX image-to-video shot needs a selected source image from this project's Media Library." }, { status: 400 });
+  let sourceAssets: Array<{id:string;drive_file_id:string|null;mime_type:string|null;name:string}> = [];
+  if (sourceIds.length) {
+    const { data, error } = await supabase.from("assets").select("id,drive_file_id,mime_type,name").in("id", [...new Set(sourceIds)]).eq("owner_id", user.id).eq("project_id", episode.project_id).is("deleted_at", null);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    sourceAssets = data || [];
+    if (sourceAssets.length !== new Set(sourceIds).size || sourceAssets.some((asset) => !asset.drive_file_id || !asset.mime_type?.startsWith("image/"))) return NextResponse.json({ error: "A selected source image is unavailable or is not an image in this project." }, { status: 400 });
+  }
+  const sourceById = new Map(sourceAssets.map((asset) => [asset.id, asset]));
   if (ordered.some((shot) => shot.status === "queued" || shot.status === "processing")) return NextResponse.json({ error: "One or more shots are already queued or processing." }, { status: 409 });
 
   const projectId = episode.project_id;
@@ -55,7 +69,7 @@ export async function POST(request: Request) {
     duration_seconds: Number(shot.duration_seconds),
     aspect_ratio: shot.aspect_ratio,
     generation_mode: shot.generation_mode,
-    model_id: shot.model_id,
+    model_id: shot.model_id,\n    source_asset_id: shot.generation_mode === "image_to_video" ? (shot.generation_settings as Record<string, unknown>).source_asset_id : null,\n    source_drive_file_id: shot.generation_mode === "image_to_video" ? sourceById.get(String((shot.generation_settings as Record<string, unknown>).source_asset_id))?.drive_file_id : null,
   }));
   const ratio = episode.aspect_ratio === "9:16" ? "9:16" : "16:9";
   const manifest = {
@@ -63,7 +77,7 @@ export async function POST(request: Request) {
     project: { id: project.id, name: project.name },
     episode: { id: episode.id, title: episode.title, aspect_ratio: ratio },
     settings: {
-      model_id: "wan21-t2v-1.3b",
+      model_id: "wan21-t2v-1.3b",\n      image_to_video_model_id: "ltx-video-0.9.6-i2v",
       fps: 16,
       width: ratio === "9:16" ? 480 : 832,
       height: ratio === "9:16" ? 832 : 480,

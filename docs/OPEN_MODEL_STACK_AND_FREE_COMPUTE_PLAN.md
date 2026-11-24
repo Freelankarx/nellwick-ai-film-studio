@@ -91,3 +91,22 @@ The worker has an experimental LTX-Video 0.9.6 distilled Diffusers adapter. It d
 - The episode render endpoint validates every source asset against the signed-in project, refuses silent episode jobs, and enqueues an FFmpeg task. The worker normalises image/video segments sequentially, checkpoints rendered segments to Drive, concatenates the picture, mixes audio tracks, optionally burns SRT subtitles, validates the MP4 and registers the final master.
 - The Shorts endpoint validates saved short plans and source project videos, then queues a 9:16 centre-crop render while retaining source-video audio. Duration is constrained to 1–180 seconds.
 - These are first export tools, not a full nonlinear editor: the current renderer uses hard cuts, centre crop and a subtle Ken Burns move for stills. Face-aware reframing, advanced transitions, grading, music/SFX generation and lip-sync remain later tasks.
+
+
+## Stage 8 — Experimental MuseTalk talking-character shots (2026-11-24)
+
+- Adds an authenticated `/api/jobs/lipsync` endpoint. Portrait and audio inputs must be active assets owned by the signed-in user and belong to the same project. If a character is selected, the portrait must already be attached to that character's approved `reference_asset_ids`.
+- Adds an Audio Studio panel for selecting a character, approved portrait and dialogue/narration audio file, then queueing a talking-character clip.
+- Adds a worker adapter for MuseTalk 1.5. It converts the still portrait into a source video matching the audio duration, then uses the MuseTalk v15 pipeline to animate the mouth/face. Output is validated and stored in the project's Google Drive and Media Library.
+- The adapter runs in a separate Python 3.10 / CUDA 11.8 virtual environment, rather than changing the existing NELLWICK Python 3.13 / PyTorch 2.11 runtime. The environment is installed on first use and cached in the Kaggle working directory for that session. The first run downloads several GB of model files; new Kaggle sessions may need the setup and model downloads again.
+- The worker uses one GPU only, FP16 and a batch size of 4; the T4/P100 fit and actual output quality must be benchmarked. The source code's published hardware tests include a 4 GB RTX 3050 Ti configuration, but that is not proof of our Kaggle runtime.
+- This is a talking close-up generator, not a full body-animation model. It does not guarantee character identity, and its upstream project documents possible facial detail changes and jitter. The worker limits individual talking shots to 0.8–60 seconds.
+- **Commercial rights warning:** MuseTalk code and model files are presented as MIT in the official project materials, but the official NOTICE also says the weights were trained on HDTF/private data and asks users to communicate with the HDTF owner about commercialization. Review the complete NOTICE and component terms before using output in monetized NELLWICK publishing. This adapter is experimental, not a representation that all rights have been cleared.
+- No SQL migration is needed; it uses the existing production_jobs, assets and character reference asset fields.
+
+## Remaining gaps after Stage 8
+
+- No verified T4 render has been completed for LTX or MuseTalk yet. Both adapters still require one live test per model.
+- MuseTalk animates face/mouth only. Full body action, character-to-character interaction and sustained camera/actor motion still depend on image-to-video/video models and have not been solved by lip-sync.
+- Music generation, sound-effect generation, face-aware 9:16 reframing, advanced transitions, colour grading and automatic episode-level orchestration are still future production stages.
+- A successful code build and job queue are not the same as a verified, watchable episode. The acceptance test is a short scene with consistent character appearance, usable lip motion, clear voice, music/ambience and a finished edited MP4.

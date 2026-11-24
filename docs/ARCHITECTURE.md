@@ -15,7 +15,7 @@
 - Project/episode/scene/shot manifests are versioned JSON, independent of any one model.
 - Each model adapter advertises task, input requirements, supported resolutions, precision and hardware constraints.
 - The model registry separates researched candidates from adapters that are truly implemented.
-- Each shot is an independently retryable unit.
+- Each shot is an independently retryable unit. Image-generation tasks are also independent jobs; reference images are stored as normal project assets in Google Drive and can be attached to character/location records by asset ID.
 - The queue uses a lease, heartbeat and `FOR UPDATE SKIP LOCKED` claim RPC.
 - Media metadata refers to Drive file IDs; the application should not treat a Drive web-view URL as a stable public CDN URL.
 - Small thumbnails can go to Supabase Storage; original MP4s and rendered masters go to Drive.

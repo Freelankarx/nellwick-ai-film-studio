@@ -12,6 +12,7 @@ type Episode = { id: string; title: string };
 type AudioAsset = { id: string; name: string; mime_type: string | null; file_size: number | null; drive_file_id: string | null; created_at: string; source_type: string };
 type VoiceLine = { id: string; speaker: string; voiceId: string; text: string; speed: number };
 type AudioEngine = "kokoro" | "edge-tts";
+type CastVoice = { id: string; name: string; voice_profile?: Record<string, string> | null };
 
 const KOKORO_VOICES = [
   { id: "af_heart", label: "Heart · American female" },
@@ -39,6 +40,7 @@ export default function AudioPage() {
   const [assets, setAssets] = useState<AudioAsset[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [cast, setCast] = useState<CastVoice[]>([]);
   const [projectId, setProjectId] = useState("");
   const [episodeId, setEpisodeId] = useState("");
   const [speaker, setSpeaker] = useState("Narrator");
@@ -104,6 +106,18 @@ export default function AudioPage() {
   }, [projectId]);
 
   useEffect(() => {
+    if (!projectId) { setCast([]); return; }
+    let active = true;
+    fetch("/api/characters?projectId=" + encodeURIComponent(projectId), { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not load the project character voice profiles.");
+        if (active) setCast(data.characters || []);
+      })
+      .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : "Could not load character voice profiles."); });
+    return () => { active = false; };
+  }, [projectId]);
+  useEffect(() => {
     if (!jobId) return;
     let active = true;
     let checking = false;
@@ -120,7 +134,7 @@ export default function AudioPage() {
         setJobProgress(Number(job.progress || 0));
         if (job.status === "completed") {
           setJobId("");
-          setNotice("Dialogue WAV files and the combined track have been added to your audio library.");
+          setNotice("Generated dialogue audio, the combined track and any word-timed subtitle files have been added to your project Media Library.");
           await loadAssets();
         } else if (job.status === "failed" || job.status === "cancelled") {
           setJobId("");
@@ -137,6 +151,20 @@ export default function AudioPage() {
     return () => { active = false; window.clearInterval(timer); };
   }, [jobId, loadAssets]);
 
+  function useSavedCharacterVoice() {
+    const character = cast.find((item) => item.name.trim().toLowerCase() === speaker.trim().toLowerCase());
+    if (!character) { setError("No saved character profile matches this speaker name in the selected project."); return; }
+    const profile = character.voice_profile || {};
+    const saved = engine === "edge-tts" ? profile.edge_tts_voice : profile.kokoro_voice_id;
+    const allowed = voices.some((voice) => voice.id === saved);
+    if (!allowed || !saved) {
+      setError(engine === "edge-tts" ? "This character has no Edge TTS voice assigned in the NELLWICK Bible." : "This character has no Kokoro preset assigned in the NELLWICK Bible.");
+      return;
+    }
+    setVoiceId(saved);
+    setError("");
+    setNotice("Loaded the saved voice profile for " + character.name + ".");
+  }
   function addLine() {
     setError("");
     const cleanText = text.trim();
@@ -223,6 +251,7 @@ export default function AudioPage() {
               {voices.map((voice) => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
             </select>
           </label>
+          <button className="secondary-btn" type="button" onClick={useSavedCharacterVoice} disabled={!cast.length}>Use saved character voice</button>
           <label className="field-label">Speaking speed · {speed.toFixed(2)}×
             <input className="field" type="range" min="0.75" max="1.25" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))}/>
           </label>
@@ -234,7 +263,7 @@ export default function AudioPage() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
           <button className="secondary-btn" onClick={addLine}><Plus size={14}/>Add line to session</button>
           <button className="primary-btn" onClick={() => void queueGeneration()} disabled={busy || !!jobId}>
-            <Volume2 size={14}/>{busy ? "Queueing…" : "Generate dialogue WAVs"}
+            <Volume2 size={14}/>{busy ? "Queueing…" : "Generate dialogue audio"}
           </button>
         </div>
         {lines.length > 0 && <div style={{ marginTop: 18 }}>

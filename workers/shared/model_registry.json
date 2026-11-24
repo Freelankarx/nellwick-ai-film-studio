@@ -88,7 +88,11 @@
       "task": "text_to_image",
       "repository": "stabilityai/stable-diffusion-xl-base-1.0",
       "license": "CreativeML Open RAIL++-M",
-      "status": "image_generation_candidate"
+      "status": "implemented_for_reference_image_jobs_requires_live_T4_benchmark",
+      "reference_resolution": "1024x1024; 1024x576; 576x1024",
+      "inference_precision": "FP16",
+      "hardware_policy": "Single GPU with at least 12 GiB total VRAM; model CPU offload, VAE slicing and tiling are enabled. Two T4 GPUs are not treated as one combined GPU.",
+      "caveat": "The queue and worker adapter are implemented, but image quality, peak VRAM, runtime and repeated-job stability have not yet been benchmarked on the user Kaggle T4 runtime."
     },
     {
       "id": "kokoro-82m",

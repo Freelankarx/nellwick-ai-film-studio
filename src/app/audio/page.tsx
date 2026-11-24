@@ -48,9 +48,6 @@ export default function AudioPage() {
   const [speaker, setSpeaker] = useState("Narrator");
   const [engine, setEngine] = useState<AudioEngine>("kokoro");
   const [voiceId, setVoiceId] = useState("af_heart");
-  const voices = engine === "edge-tts" ? EDGE_VOICES : KOKORO_VOICES;
-  const lipSyncCharacter = cast.find((item) => item.id === lipSyncCharacterId);
-  const lipSyncPortraits = referenceAssets.filter((asset) => !lipSyncCharacter?.reference_asset_ids?.length || lipSyncCharacter.reference_asset_ids.includes(asset.id));
   const [text, setText] = useState("");
   const [speed, setSpeed] = useState(1);
   const [lines, setLines] = useState<VoiceLine[]>([]);
@@ -67,6 +64,12 @@ export default function AudioPage() {
   const [lipSyncJobId, setLipSyncJobId] = useState("");
   const [lipSyncStatus, setLipSyncStatus] = useState("");
   const [lipSyncProgress, setLipSyncProgress] = useState(0);
+
+  const voices = engine === "edge-tts" ? EDGE_VOICES : KOKORO_VOICES;
+  const lipSyncCharacter = cast.find((item) => item.id === lipSyncCharacterId);
+  const lipSyncPortraits = lipSyncCharacterId
+    ? referenceAssets.filter((asset) => (lipSyncCharacter?.reference_asset_ids || []).includes(asset.id))
+    : referenceAssets;
 
   const loadAssets = useCallback(async (project?: string) => {
     const path = project ? "/api/assets?projectId=" + encodeURIComponent(project) : "/api/assets";
@@ -130,7 +133,7 @@ export default function AudioPage() {
       })
       .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : "Could not load character voice profiles."); });
     return () => { active = false; };
-  }, [projectId, loadAssets]);
+  }, [projectId]);
   useEffect(() => {
     if (!jobId) return;
     let active = true;
@@ -149,7 +152,7 @@ export default function AudioPage() {
         if (job.status === "completed") {
           setJobId("");
           setNotice("Generated dialogue audio, the combined track and any word-timed subtitle files have been added to your project Media Library.");
-          await loadAssets();
+          await loadAssets(projectId);
         } else if (job.status === "failed" || job.status === "cancelled") {
           setJobId("");
           setError(job.last_error || "Voice generation did not complete. Review the Production queue.");
@@ -163,7 +166,7 @@ export default function AudioPage() {
     void check();
     const timer = window.setInterval(() => void check(), 5000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [jobId, loadAssets]);
+  }, [jobId, loadAssets, projectId]);
 
   useEffect(() => {
     if (!lipSyncJobId) return;

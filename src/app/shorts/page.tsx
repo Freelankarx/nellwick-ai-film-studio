@@ -9,11 +9,45 @@ type Project = { id: string; name: string };
 type Episode = { id: string; title: string; production_manifest: Record<string, unknown> | null };
 type Asset = { id: string; name: string; mime_type: string | null; drive_file_id: string | null; file_size?: number | null };
 type ShortPlan = { id: string; asset_id: string; title: string; start_seconds: number; duration_seconds: number; aspect_ratio: "9:16" };
+type ShortBlueprint = {
+  id: string;
+  title: string;
+  hook: string;
+  concept: string;
+  duration_seconds: number;
+  characters: string[];
+  location_name: string;
+  product_used: string | null;
+  script_markdown: string;
+  voiceover: string;
+  caption: string;
+  thumbnail_text: string;
+  cta: string;
+  scenes: {
+    scene_number: number;
+    duration_seconds: number;
+    visual_description: string;
+    shot_prompt: string;
+    sound_design: string;
+    dialogue: { speaker: string; text: string }[];
+  }[];
+};
 function readPlans(value: unknown): ShortPlan[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const plans = (value as Record<string, unknown>).shorts;
   return Array.isArray(plans) ? plans.filter((item): item is ShortPlan =>
     !!item && typeof item === "object" && typeof (item as ShortPlan).asset_id === "string"
+  ) : [];
+}
+
+function readBlueprints(value: unknown): ShortBlueprint[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const items = (value as Record<string, unknown>).short_blueprints;
+  return Array.isArray(items) ? items.filter((item): item is ShortBlueprint =>
+    !!item && typeof item === "object" &&
+    typeof (item as ShortBlueprint).id === "string" &&
+    typeof (item as ShortBlueprint).title === "string" &&
+    typeof (item as ShortBlueprint).script_markdown === "string"
   ) : [];
 }
 
@@ -27,6 +61,12 @@ export default function ShortsPage() {
   const [title, setTitle] = useState("New vertical Short");
   const [start, setStart] = useState(0);
   const [duration, setDuration] = useState(45);
+  const [shortsPrompt, setShortsPrompt] = useState("");
+  const [productFocus, setProductFocus] = useState<"natural" | "grooming_brush" | "hair_glove" | "none">("natural");
+  const [blueprints, setBlueprints] = useState<ShortBlueprint[]>([]);
+  const [planningJobId, setPlanningJobId] = useState("");
+  const [planningStatus, setPlanningStatus] = useState("");
+  const [planningProgress, setPlanningProgress] = useState(0);
   const [plans, setPlans] = useState<ShortPlan[]>([]);
   const [busy, setBusy] = useState(false);
   const [renderJobId, setRenderJobId] = useState("");
@@ -74,7 +114,10 @@ export default function ShortsPage() {
     return () => { active = false; };
   }, [projectId, loadEpisodes, loadAssets]);
 
-  useEffect(() => { setPlans(readPlans(episode?.production_manifest)); }, [episodeId, episode?.id, episode?.production_manifest]);
+  useEffect(() => {
+    setPlans(readPlans(episode?.production_manifest));
+    setBlueprints(readBlueprints(episode?.production_manifest));
+  }, [episodeId, episode?.id, episode?.production_manifest]);
 
   useEffect(() => {
     if (!renderJobId) return;

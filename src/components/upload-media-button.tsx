@@ -3,7 +3,19 @@
 import { useState } from "react";
 import { UploadCloud, CheckCircle2, AlertCircle } from "lucide-react";
 
-export function UploadMediaButton({ onUploaded }: { onUploaded?: () => void }) {
+export type UploadedMediaAsset = { id: string; name: string; mime_type: string | null; drive_file_id: string | null; project_id: string | null };
+
+export function UploadMediaButton({
+  onUploaded,
+  projectId,
+  accept = "image/*,video/*,audio/*",
+  buttonLabel = "Upload media",
+}: {
+  onUploaded?: (asset: UploadedMediaAsset) => void;
+  projectId?: string;
+  accept?: string;
+  buttonLabel?: string;
+}) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
@@ -69,12 +81,18 @@ export function UploadMediaButton({ onUploaded }: { onUploaded?: () => void }) {
       const registered = await fetch("/api/drive/register-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ file_id: driveFile.id, source_type: "uploaded" })
+        body: JSON.stringify({ file_id: driveFile.id, source_type: "uploaded", ...(projectId ? { project_id: projectId } : {}) })
       });
       const result = await registered.json();
       if (!registered.ok) throw new Error(result.error || "Upload completed but media registration failed.");
       setMessage("Upload complete · added to your media library.");
-      onUploaded?.();
+      onUploaded?.({
+        id: result.asset.id,
+        name: result.asset.name,
+        mime_type: result.asset.mime_type || null,
+        drive_file_id: result.asset.drive_file_id || null,
+        project_id: result.asset.project_id || null,
+      });
     } catch (error) {
       setFailed(true);
       setMessage(error instanceof Error ? error.message : "Upload failed.");
@@ -85,8 +103,8 @@ export function UploadMediaButton({ onUploaded }: { onUploaded?: () => void }) {
 
   return <div style={{ display: "inline-flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
     <label className="primary-btn" style={{ cursor: busy ? "wait" : "pointer", opacity: busy ? 0.7 : 1 }}>
-      <UploadCloud size={14} />{busy ? "Uploading…" : "Upload media"}
-      <input type="file" accept="image/*,video/*,audio/*" hidden disabled={busy} onChange={(event) => {
+      <UploadCloud size={14} />{busy ? "Uploading…" : buttonLabel}
+      <input type="file" accept={accept} hidden disabled={busy} onChange={(event) => {
         const file = event.target.files?.[0];
         if (file) void upload(file);
         event.currentTarget.value = "";

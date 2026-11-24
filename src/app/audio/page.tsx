@@ -369,7 +369,7 @@ export default function AudioPage() {
         <span className="pill">MuseTalk 1.5 · Kaggle GPU</span>
       </div>
       <div className="notice" style={{ marginTop: 12 }}>
-        This creates a talking close-up from one still image. It does not animate the character's body or guarantee perfect identity preservation. The first job installs a separate Python 3.10 environment and downloads several model weights; later jobs in the same Kaggle session can reuse them. Review MuseTalk's training-data commercialisation notice before using generated output in monetized publishing.
+        Use one clear, front-facing portrait and a short English dialogue line (maximum 60 seconds). This creates a talking close-up from one still image. It does not animate the character&apos;s body or guarantee perfect identity preservation. The first job installs a separate Python 3.10 environment and downloads several model weights; later jobs in the same Kaggle session can reuse them. Review MuseTalk&apos;s training-data commercialisation notice before using generated output in monetized publishing.
       </div>
       <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 14 }}>
         <label className="field-label">Character (optional)

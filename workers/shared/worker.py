@@ -584,6 +584,224 @@ class NELLWICKWorker:
         result["shots"] = cleaned
         return result
 
+    def plan_three_shorts(self, manifest: dict) -> dict:
+        brief = manifest.get("input") or {}
+        project = manifest.get("project") or {}
+        episode = manifest.get("episode") or {}
+        characters = brief.get("characters") if isinstance(brief.get("characters"), list) else []
+        locations = brief.get("locations") if isinstance(brief.get("locations"), list) else []
+        products = brief.get("products") if isinstance(brief.get("products"), list) else []
+
+        system_prompt = (
+            "You are the short-form showrunner and vertical-film director for NELLWICK ORIGINALS. "
+            "Create three genuinely different, original short-form film concepts from the user's brief. "
+            "They are story-first 9:16 videos, not generic listicles or repetitive AI filler. "
+            "Use only the supplied NELLWICK characters, locations and products. "
+            "Preserve the canonical appearance, personality, wardrobe and relationships of supplied characters. "
+            "Products may appear only when natural to the story; never invent product claims, features or specifications. "
+            "Return exactly one valid JSON object, with no markdown fences or commentary."
+        )
+        user_prompt = json.dumps({
+            "task": "Create exactly three distinct YouTube Shorts / Reels / TikTok vertical film blueprints for the NELLWICK ORIGINALS brand.",
+            "project": project,
+            "episode_context": episode,
+            "brief": brief,
+            "character_bible": characters,
+            "location_bible": locations,
+            "product_bible": products,
+            "required_structure": {
+                "shorts": [{
+                    "title": "YouTube title, distinct from the other two",
+                    "hook": "An immediate visual or spoken hook for the first 1-2 seconds",
+                    "concept": "One-sentence premise",
+                    "duration_seconds": 45,
+                    "characters": ["only supplied character names"],
+                    "location_name": "one supplied recurring location",
+                    "product_used": "one supplied product id or null",
+                    "script_markdown": "complete concise screenplay with action and dialogue/voiceover, approximately 90-130 spoken words for a 45-second short",
+                    "voiceover": "complete narration only, or empty if the short is dialogue-led",
+                    "caption": "short description for YouTube",
+                    "thumbnail_text": "2-5 words, no misleading claim",
+                    "cta": "natural story-appropriate ending or next-episode prompt",
+                    "scenes": [{
+                        "scene_number": 1,
+                        "duration_seconds": 8,
+                        "visual_description": "one continuous action",
+                        "shot_prompt": "vertical 9:16 cinematic visual prompt; subject, composition, environment, lighting, action, camera movement and continuity details",
+                        "camera": {"framing": "close-up", "angle": "eye level", "movement": "slow push in", "lens": "50mm", "lighting": "motivated practical light"},
+                        "dialogue": [{"speaker": "Grace", "text": "spoken line"}],
+                        "voiceover": "",
+                        "sound_design": "specific ambience and sound-effect direction",
+                        "is_short_worthy": True
+                    }]
+                }]
+            },
+            "creative_rules": [
+                "Return exactly 3 shorts with different story engines and different opening hooks.",
+                "Each short should be 35-55 seconds, vertical 9:16, and contain 4-7 scenes.",
+                "Scene durations must sum to the stated short duration, with each scene 3-15 seconds.",
+                "Start with an intriguing image, question, reveal or emotional beat immediately. No logo intro.",
+                "Each short must have a mini-arc: hook, escalation, emotional or surprising payoff, and optional cliffhanger.",
+                "Use Daniel, Grace, Lily, Michael and Milo only when appropriate; do not force every character into every short.",
+                "Keep dialogue conversational and concise. Write specific visual actions, not abstract summaries.",
+                "Respect product_focus exactly: 'none' means product_used must be null in all three; 'grooming_brush' means only that product may appear and only where natural; 'hair_glove' means only that product may appear and only where natural; 'natural' means no more than one short may include a product, only when it fits the story.",
+                "The product must be integrated naturally and never become an advertisement interrupting the story.",
+                "Do not invent store discounts, prices, clinical results, product certifications or unverified product performance.",
+                "Do not write captions, watermarks or graphic text into video-generation prompts; add text later during editing.",
+                "For every scene, describe one continuous action suitable for an individual generated shot or still-image motion treatment.",
+                "Use the exact supplied character names in dialogue speaker fields. Narrator is permitted.",
+                "Avoid repetitive template structures across the three shorts."
+            ],
+        }, ensure_ascii=False)
+
+        result = self.qwen_json(system_prompt, user_prompt, max_new_tokens=5200)
+        raw_shorts = result.get("shorts")
+        if not isinstance(raw_shorts, list) or len(raw_shorts) != 3:
+            raise StudioError("The Shorts planner must return exactly three concepts. Retry the Shorts plan.")
+
+        allowed_characters = {
+            str(item.get("name") or "").strip().casefold()
+            for item in characters if isinstance(item, dict)
+        }
+        if not allowed_characters:
+            allowed_characters = {"narrator"}
+        allowed_speakers = allowed_characters | {"narrator"}
+        allowed_locations = {
+            str(item.get("name") or "").strip().casefold()
+            for item in locations if isinstance(item, dict)
+        }
+        allowed_products = {
+            str(item.get("id") or "").strip()
+            for item in products if isinstance(item, dict)
+        }
+
+        cleaned_shorts = []
+        product_focus = str(brief.get("product_focus") or "natural")
+        focused_product = {"grooming_brush": "GROOMING_BRUSH", "hair_glove": "HAIR_GLOVE"}.get(product_focus)
+        product_already_used = False
+        for short_index, short in enumerate(raw_shorts, start=1):
+            if not isinstance(short, dict):
+                raise StudioError(f"Short {short_index} is not a valid object.")
+            title = str(short.get("title") or f"NELLWICK Short {short_index}").strip()[:160]
+            hook = str(short.get("hook") or "").strip()[:500]
+            concept = str(short.get("concept") or "").strip()[:1500]
+            script = str(short.get("script_markdown") or "").strip()[:12000]
+            if len(hook) < 8 or len(concept) < 15 or len(script) < 60:
+                raise StudioError(f"Short {short_index} is missing a complete hook, concept or screenplay.")
+            try:
+                duration = int(short.get("duration_seconds", 45))
+            except (TypeError, ValueError):
+                duration = 45
+            duration = max(35, min(55, duration))
+
+            raw_scenes = short.get("scenes")
+            if not isinstance(raw_scenes, list) or not 4 <= len(raw_scenes) <= 7:
+                raise StudioError(f"Short {short_index} must contain 4-7 scene plans.")
+            scenes = []
+            scene_total = 0
+            for scene_index, scene in enumerate(raw_scenes, start=1):
+                if not isinstance(scene, dict):
+                    continue
+                prompt = str(scene.get("shot_prompt") or "").strip()
+                visual = str(scene.get("visual_description") or "").strip()
+                if len(prompt) < 20 or len(visual) < 10:
+                    continue
+                try:
+                    scene_duration = int(scene.get("duration_seconds", 7))
+                except (TypeError, ValueError):
+                    scene_duration = 7
+                scene_duration = max(3, min(15, scene_duration))
+                dialogue_raw = scene.get("dialogue") if isinstance(scene.get("dialogue"), list) else []
+                dialogue = []
+                for line in dialogue_raw[:5]:
+                    if not isinstance(line, dict):
+                        continue
+                    speaker = str(line.get("speaker") or "Narrator").strip()
+                    if speaker.casefold() not in allowed_speakers:
+                        speaker = "Narrator"
+                    text = str(line.get("text") or "").strip()[:600]
+                    if text:
+                        dialogue.append({"speaker": speaker[:80], "text": text})
+                camera = scene.get("camera") if isinstance(scene.get("camera"), dict) else {}
+                scenes.append({
+                    "scene_number": scene_index,
+                    "duration_seconds": scene_duration,
+                    "visual_description": visual[:1800],
+                    "shot_prompt": prompt[:4000],
+                    "camera": {str(key)[:60]: value for key, value in list(camera.items())[:12] if isinstance(value, (str, int, float, bool))},
+                    "dialogue": dialogue,
+                    "voiceover": str(scene.get("voiceover") or "")[:1000],
+                    "sound_design": str(scene.get("sound_design") or "")[:1000],
+                    "is_short_worthy": True,
+                })
+                scene_total += scene_duration
+            if len(scenes) < 4:
+                raise StudioError(f"Short {short_index} has fewer than four usable visual scenes.")
+            delta = duration - scene_total
+            # Distribute the duration correction across scenes without exceeding per-scene bounds.
+            while delta > 0:
+                candidates = [item for item in scenes if item["duration_seconds"] < 15]
+                if not candidates:
+                    break
+                for item in candidates:
+                    if delta <= 0:
+                        break
+                    step = min(15 - item["duration_seconds"], delta)
+                    item["duration_seconds"] += step
+                    delta -= step
+            while delta < 0:
+                candidates = [item for item in scenes if item["duration_seconds"] > 3]
+                if not candidates:
+                    break
+                for item in candidates:
+                    if delta >= 0:
+                        break
+                    step = min(item["duration_seconds"] - 3, -delta)
+                    item["duration_seconds"] -= step
+                    delta += step
+            if delta != 0:
+                raise StudioError(f"Short {short_index} scene durations cannot be normalized to {duration} seconds.")
+            character_names = []
+            for name in short.get("characters", [])[:8] if isinstance(short.get("characters"), list) else []:
+                clean_name = str(name).strip()
+                if clean_name.casefold() in allowed_characters and clean_name not in character_names:
+                    character_names.append(clean_name)
+            location_name = str(short.get("location_name") or "").strip()
+            if location_name.casefold() not in allowed_locations:
+                location_name = next(iter(locations), {}).get("name", "") if locations else ""
+            product_used = short.get("product_used")
+            if product_focus == "none":
+                product_used = None
+            elif product_focus in ("grooming_brush", "hair_glove"):
+                if product_used != focused_product:
+                    product_used = None
+            elif product_focus == "natural" and product_already_used:
+                product_used = None
+            if product_used not in allowed_products:
+                product_used = None
+            if product_used:
+                product_already_used = True
+
+            cleaned_shorts.append({
+                "title": title,
+                "hook": hook,
+                "concept": concept,
+                "duration_seconds": duration,
+                "aspect_ratio": "9:16",
+                "characters": character_names,
+                "location_name": location_name,
+                "product_used": product_used,
+                "script_markdown": script,
+                "voiceover": str(short.get("voiceover") or "")[:4000],
+                "caption": str(short.get("caption") or "")[:1000],
+                "thumbnail_text": str(short.get("thumbnail_text") or "")[:80],
+                "cta": str(short.get("cta") or "")[:500],
+                "scenes": scenes,
+            })
+
+        result["shorts"] = cleaned_shorts
+        return result
+
     def process_planning_job(self, job: dict, task: str):
         job_id = job["id"]
         manifest = job.get("manifest") or {}
@@ -593,6 +811,9 @@ class NELLWICKWorker:
         elif task == "shot_plan":
             self.update_progress(job_id, 5, "Loading local AI storyboard planner")
             output = self.plan_scene_shots(manifest)
+        elif task == "shorts_plan":
+            self.update_progress(job_id, 5, "Loading local AI Shorts showrunner")
+            output = self.plan_three_shorts(manifest)
         else:
             raise StudioError(f"Unsupported AI planning task: {task}")
         self.update_progress(job_id, 92, "Saving AI planning results to the studio")
@@ -828,7 +1049,7 @@ class NELLWICKWorker:
             from lipsync import process_musetalk_lip_sync_job
             process_musetalk_lip_sync_job(self, job)
             return
-        if task in ("story_plan", "shot_plan"):
+        if task in ("story_plan", "shot_plan", "shorts_plan"):
             self.unload_ltx()
             # A previous video job in the same notebook session may leave Wan allocated.
             self.unload_wan()

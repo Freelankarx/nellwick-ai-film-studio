@@ -38,9 +38,44 @@ const shotOutputSchema = z.object({
   })).min(1).max(12),
 });
 
+const shortSceneSchema = z.object({
+  scene_number: z.number().int().min(1).max(7),
+  duration_seconds: z.number().int().min(3).max(15),
+  visual_description: z.string().trim().min(10).max(1800),
+  shot_prompt: z.string().trim().min(20).max(4000),
+  camera: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
+  dialogue: z.array(z.object({
+    speaker: z.string().trim().min(1).max(80),
+    text: z.string().trim().min(1).max(600),
+  })).max(5).default([]),
+  voiceover: z.string().max(1000).default(""),
+  sound_design: z.string().max(1000).default(""),
+  is_short_worthy: z.boolean().default(true),
+});
+
+const shortsOutputSchema = z.object({
+  shorts: z.array(z.object({
+    title: z.string().trim().min(3).max(160),
+    hook: z.string().trim().min(8).max(500),
+    concept: z.string().trim().min(15).max(1500),
+    duration_seconds: z.number().int().min(35).max(55),
+    aspect_ratio: z.literal("9:16").default("9:16"),
+    characters: z.array(z.string().trim().min(1).max(80)).max(8).default([]),
+    location_name: z.string().max(160).default(""),
+    product_used: z.string().max(80).nullable().default(null),
+    script_markdown: z.string().trim().min(60).max(12000),
+    voiceover: z.string().max(4000).default(""),
+    caption: z.string().max(1000).default(""),
+    thumbnail_text: z.string().max(80).default(""),
+    cta: z.string().max(500).default(""),
+    scenes: z.array(shortSceneSchema).min(4).max(7),
+  })).length(3),
+});
+
 const requestSchema = z.discriminatedUnion("task", [
   z.object({ job_id: z.string().uuid(), task: z.literal("story_plan"), output: storyOutputSchema, model_id: z.string().max(160) }),
   z.object({ job_id: z.string().uuid(), task: z.literal("shot_plan"), output: shotOutputSchema, model_id: z.string().max(160) }),
+  z.object({ job_id: z.string().uuid(), task: z.literal("shorts_plan"), output: shortsOutputSchema, model_id: z.string().max(160) }),
 ]);
 
 function isRecord(value: Json | null | undefined): value is { [key: string]: Json | undefined } {
@@ -229,6 +264,63 @@ export async function POST(request: Request) {
       .eq("status", "processing");
     if (jobUpdateError) return NextResponse.json({ error: jobUpdateError.message }, { status: 500 });
     return NextResponse.json({ ok: true, task: input.task, character_count: savedCharacterIds.length, scene_count: savedScenes?.length || 0, scenes: savedScenes || [] });
+  }
+
+  if (input.task === "shorts_plan") {
+    const { data: episode, error: episodeError } = await admin.from("episodes")
+      .select("id,project_id,production_manifest")
+      .eq("id", job.episode_id)
+      .eq("project_id", job.project_id)
+      .eq("owner_id", worker.ownerId)
+      .maybeSingle();
+    if (episodeError) return NextResponse.json({ error: episodeError.message }, { status: 500 });
+    if (!episode) return NextResponse.json({ error: "Linked episode no longer exists." }, { status: 404 });
+
+    const oldManifest = isRecord(episode.production_manifest as Json)
+      ? episode.production_manifest as Record<string, Json>
+      : {};
+    const previous = Array.isArray(oldManifest.short_blueprints)
+      ? oldManifest.short_blueprints.filter((item): item is Json => !!item && typeof item === "object" && !Array.isArray(item))
+      : [];
+    const generatedAt = new Date().toISOString();
+    const newBlueprints = input.output.shorts.map((short, index) => ({
+      ...short,
+      id: crypto.randomUUID(),
+      sequence: previous.length + index + 1,
+      status: "script_ready",
+      generated_by_job_id: job.id,
+      generated_at: generatedAt,
+      model_id: input.model_id,
+    }));
+    const nextManifest: Record<string, Json> = {
+      ...oldManifest,
+      short_blueprints: [...previous, ...newBlueprints] as unknown as Json,
+      shorts_planner: {
+        latest_job_id: job.id,
+        model_id: input.model_id,
+        generated_at: generatedAt,
+        count: newBlueprints.length,
+      },
+    };
+    const { error: episodeUpdateError } = await admin.from("episodes")
+      .update({ production_manifest: nextManifest })
+      .eq("id", episode.id)
+      .eq("owner_id", worker.ownerId);
+    if (episodeUpdateError) return NextResponse.json({ error: episodeUpdateError.message }, { status: 500 });
+
+    const finalResult: Record<string, Json> = {
+      task: "shorts_plan",
+      model_id: input.model_id,
+      blueprint_count: newBlueprints.length,
+      blueprint_ids: newBlueprints.map((short) => short.id),
+    };
+    const { error: jobUpdateError } = await admin.from("production_jobs")
+      .update({ status: "completed", progress: 100, result: finalResult, completed_at: new Date().toISOString(), lease_expires_at: null, last_error: null })
+      .eq("id", job.id)
+      .eq("owner_id", worker.ownerId)
+      .eq("status", "processing");
+    if (jobUpdateError) return NextResponse.json({ error: jobUpdateError.message }, { status: 500 });
+    return NextResponse.json({ ok: true, task: input.task, blueprint_count: newBlueprints.length, blueprints: newBlueprints });
   }
 
   const sceneId = typeof manifest.scene_id === "string" ? manifest.scene_id : "";

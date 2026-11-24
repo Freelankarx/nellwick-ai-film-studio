@@ -96,6 +96,17 @@ def _render_clip(
         raise RuntimeError(f"Rendered clip is unexpectedly small: {source.name}")
 
 
+def _render_gap(output: Path, duration: float, width: int, height: int) -> None:
+    duration = max(0.05, min(600.0, float(duration)))
+    _run([
+        _ffmpeg(), "-y", "-f", "lavfi", "-i",
+        f"color=c=black:s={width}x{height}:r=24",
+        "-t", f"{duration:.3f}", "-an", "-c:v", "libx264",
+        "-preset", "veryfast", "-crf", "22", "-threads", "2",
+        "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(output),
+    ], "Timeline gap render", max(60, int(duration * 30)))
+
+
 def _concat_video(clips: list[Path], output: Path) -> None:
     if not clips:
         raise RuntimeError("The episode timeline contains no rendered clips.")
@@ -197,7 +208,7 @@ def process_episode_render_job(worker: Any, job: dict[str, Any]) -> None:
         raise RuntimeError("Episode render needs at least one dialogue, narration, music or sound-effects track. Refusing to export a silent film.")
 
     ratio = str(settings.get("aspect_ratio") or "16:9")
-    width, height = (720, 1280) if ratio == "9:16" else ((1080, 1080) if ratio == "1:1" else (1280, 720))
+    width, height = (720, 1280) if ratio == "9:16" else ((1080, 1080) if ratio == "1:1" else ((864, 1080) if ratio == "4:5" else (1280, 720)))
     project_name = str(project.get("name") or "NELLWICK Project")
     episode_title = str(episode.get("title") or "Episode")
     worker.unload_wan()
@@ -222,8 +233,15 @@ def process_episode_render_job(worker: Any, job: dict[str, Any]) -> None:
     segment_assets: list[dict[str, Any]] = []
     ordered = sorted(clips, key=lambda item: (float(item.get("start_seconds", 0)), int(item.get("order", 0))))
 
+    timeline_cursor = 0.0
     for index, clip in enumerate(ordered, start=1):
         worker.raise_if_cancelled()
+        clip_start = max(0.0, float(clip.get("start_seconds", timeline_cursor)))
+        if clip_start > timeline_cursor + 0.05:
+            gap_path = work_dir / f"gap_{index:04d}.mp4"
+            gap_duration = clip_start - timeline_cursor
+            _render_gap(gap_path, gap_duration, width, height)
+            rendered_paths.append(gap_path)
         clip_id = str(clip["id"])
         output = work_dir / f"segment_{index:04d}.mp4"
         saved = saved_by_id.get(clip_id)
@@ -256,12 +274,13 @@ def process_episode_render_job(worker: Any, job: dict[str, Any]) -> None:
             )
         _validate_mp4(output)
         rendered_paths.append(output)
+        timeline_cursor = clip_start + float(clip["duration_seconds"])
 
     worker.raise_if_cancelled()
     worker.update_progress(job_id, 73, "Assembling the picture edit")
     picture = work_dir / "episode_picture.mp4"
     _concat_video(rendered_paths, picture)
-    total_duration = sum(float(item["duration_seconds"]) for item in ordered)
+    total_duration = max(float(item["start_seconds"]) + float(item["duration_seconds"]) for item in ordered)
 
     downloaded_tracks = []
     for index, track in enumerate(audio_tracks, start=1):

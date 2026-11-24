@@ -722,6 +722,13 @@ class NELLWICKWorker:
         if task == "image_generation":
             self.process_image_generation_job(job)
             return
+        if task == "audio_generation":
+            self.unload_wan()
+            self.unload_qwen()
+            self.unload_sdxl()
+            from audio import process_kokoro_audio_job
+            process_kokoro_audio_job(self, job)
+            return
         if task in ("story_plan", "shot_plan"):
             # A previous video job in the same notebook session may leave Wan allocated.
             self.unload_wan()

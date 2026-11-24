@@ -38,6 +38,7 @@ type Location = {
 };
 type ReferenceImage = { id: string; name: string; mime_type: string | null; drive_file_id: string | null; project_id: string | null };
 type Tab = "characters" | "locations";
+type BrandProduct = { id: string; name: string; description: string; placement_rule: string };
 
 const emptyCharacter = {
   name: "",
@@ -87,6 +88,7 @@ export default function CharactersPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [projectImages, setProjectImages] = useState<ReferenceImage[]>([]);
+  const [brandProducts, setBrandProducts] = useState<BrandProduct[]>([]);
   const [tab, setTab] = useState<Tab>("characters");
   const [characterForm, setCharacterForm] = useState(emptyCharacter);
   const [characterReferences, setCharacterReferences] = useState<string[]>([]);
@@ -104,22 +106,28 @@ export default function CharactersPage() {
       setCharacters([]);
       setLocations([]);
       setProjectImages([]);
+      setBrandProducts([]);
       return;
     }
-    const [characterResponse, locationResponse, assetResponse] = await Promise.all([
+    const [characterResponse, locationResponse, assetResponse, projectResponse] = await Promise.all([
       fetch(`/api/characters?projectId=${encodeURIComponent(id)}`, { cache: "no-store" }),
       fetch(`/api/locations?projectId=${encodeURIComponent(id)}`, { cache: "no-store" }),
       fetch(`/api/assets?projectId=${encodeURIComponent(id)}`, { cache: "no-store" }),
+      fetch(`/api/projects/${id}`, { cache: "no-store" }),
     ]);
-    const [characterData, locationData, assetData] = await Promise.all([
-      characterResponse.json(), locationResponse.json(), assetResponse.json(),
+    const [characterData, locationData, assetData, projectData] = await Promise.all([
+      characterResponse.json(), locationResponse.json(), assetResponse.json(), projectResponse.json(),
     ]);
     if (!characterResponse.ok) throw new Error(characterData.error || "Could not load characters.");
     if (!locationResponse.ok) throw new Error(locationData.error || "Could not load locations.");
     if (!assetResponse.ok) throw new Error(assetData.error || "Could not load project media.");
+    if (!projectResponse.ok) throw new Error(projectData.error || "Could not load project settings.");
     setCharacters(characterData.characters || []);
     setLocations(locationData.locations || []);
     setProjectImages((assetData.assets || []).filter((asset: ReferenceImage) => asset.mime_type?.startsWith("image/")));
+    const settings = projectData.project?.settings && typeof projectData.project.settings === "object" ? projectData.project.settings as Record<string, unknown> : {};
+    const bible = settings.nellwick_brand_bible && typeof settings.nellwick_brand_bible === "object" ? settings.nellwick_brand_bible as Record<string, unknown> : {};
+    setBrandProducts(Array.isArray(bible.products) ? bible.products as BrandProduct[] : []);
   }, []);
 
   const loadProjects = useCallback(async () => {
@@ -335,6 +343,17 @@ return (
           </select>
         </label>
       </section>
+
+      {projectId && brandProducts.length > 0 && <section className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-heading"><div><div className="panel-title">NELLWICK product vault</div><div className="panel-subtitle">Stored with this project's brand bible. Use real product photos/specifications as the visual and factual source of truth.</div></div><span className="pill">{brandProducts.length} products</span></div>
+        <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          {brandProducts.map((product) => <article className="panel" key={product.id}>
+            <div className="panel-title">{product.name}</div>
+            <p className="panel-subtitle" style={{ marginTop: 8 }}>{product.description}</p>
+            <p className="muted" style={{ marginTop: 8 }}>{product.placement_rule}</p>
+          </article>)}
+        </div>
+      </section>}
 
       {!projects.length && !loading ? (
         <div className="project-empty">

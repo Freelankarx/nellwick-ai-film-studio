@@ -1036,7 +1036,7 @@ class NELLWICKWorker:
             from lipsync import process_musetalk_lip_sync_job
             process_musetalk_lip_sync_job(self, job)
             return
-        if task in ("story_plan", "shot_plan"):
+        if task in ("story_plan", "shot_plan", "shorts_plan"):
             self.unload_ltx()
             # A previous video job in the same notebook session may leave Wan allocated.
             self.unload_wan()

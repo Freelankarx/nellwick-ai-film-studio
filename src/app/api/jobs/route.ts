@@ -6,7 +6,7 @@ export async function GET() {
   const { user, supabase } = await requireUser();
   if (!user) return NextResponse.json({ error: "Sign in to view production jobs." }, { status: 401 });
   const { data, error } = await supabase.from("production_jobs")
-    .select("id,title,status,progress,created_at,attempt_count,last_error,project_id,episode_id")
+    .select("id,title,status,progress,created_at,attempt_count,last_error,lease_expires_at,project_id,episode_id")
     .eq("owner_id", user.id).order("created_at", { ascending: false }).limit(100);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ jobs: data || [] }, { headers: { "Cache-Control": "no-store" } });

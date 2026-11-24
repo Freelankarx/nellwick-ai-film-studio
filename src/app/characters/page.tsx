@@ -286,13 +286,32 @@ export default function CharactersPage() {
 
   const selectedProject = projects.find((project) => project.id === projectId);
 
-  return (
+    async function initializeNellwickBible() {
+    if (!projectId) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch(`/api/projects/${projectId}/initialize-brand-bible`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not initialize the NELLWICK brand bible.");
+      await loadRecords(projectId);
+      setNotice(`NELLWICK bible ready: ${data.created_characters} characters and ${data.created_locations} locations added; existing profiles were preserved.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not initialize the NELLWICK brand bible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+return (
     <div className="page-wrap">
       <PageHeading
         eyebrow="PROJECT BIBLE"
         title="Characters & worlds"
         subtitle="Build reusable character identities and location references that can guide visual continuity across scenes."
-        action={<button className="secondary-btn" type="button" onClick={() => void loadRecords(projectId)} disabled={!projectId || loading}><RefreshCw size={14}/> Refresh</button>}
+        action={<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="secondary-btn" type="button" onClick={() => void loadRecords(projectId)} disabled={!projectId || loading}><RefreshCw size={14}/> Refresh</button>
+          <button className="primary-btn" type="button" onClick={() => void initializeNellwickBible()} disabled={!projectId || busy || loading}><Users size={14}/> {busy ? "Preparing…" : "Initialize NELLWICK Bible"}</button>
+        </div>}
       />
 
       {error && <div className="notice" role="alert" style={{ marginBottom: 12 }}>{error}</div>}

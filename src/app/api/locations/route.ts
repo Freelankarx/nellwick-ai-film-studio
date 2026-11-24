@@ -7,7 +7,28 @@ const locationSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().max(5000).optional().default(""),
   continuity_notes: z.string().max(4000).optional().default(""),
+  visual_reference_ids: z.array(z.string().uuid()).max(100).optional().default([]),
 });
+
+async function validateReferenceAssets(
+  supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+  ownerId: string,
+  projectId: string,
+  assetIds: string[],
+) {
+  const ids = [...new Set(assetIds)];
+  if (ids.length !== assetIds.length) return "Reference images contain duplicate selections.";
+  if (!ids.length) return null;
+  const { data, error } = await supabase.from("assets")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .like("mime_type", "image/%")
+    .in("id", ids);
+  if (error) return error.message;
+  return (data || []).length === ids.length ? null : "Every reference must be an active image in this project.";
+}
 
 export async function GET(request: Request) {
   const { user, supabase } = await requireUser();
@@ -27,6 +48,8 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid location." }, { status: 400 });
   const { data: project } = await supabase.from("projects").select("id").eq("id", parsed.data.project_id).eq("owner_id", user.id).maybeSingle();
   if (!project) return NextResponse.json({ error: "Project not found." }, { status: 404 });
+  const referenceError = await validateReferenceAssets(supabase, user.id, project.id, parsed.data.visual_reference_ids);
+  if (referenceError) return NextResponse.json({ error: referenceError }, { status: 400 });
   const { data, error } = await supabase.from("locations").insert({ ...parsed.data, owner_id: user.id }).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ location: data }, { status: 201 });

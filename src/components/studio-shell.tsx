@@ -4,23 +4,21 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  Activity,
-  Bell,
   Boxes,
   Clapperboard,
   Film,
   FolderKanban,
   Gauge,
-  Image,
+  Image as ImageIcon,
   Layers3,
+  LogOut,
   Menu,
   Mic2,
   MonitorPlay,
-  Search,
+  Plus,
   Settings2,
   Sparkles,
   Users2,
-  LogOut,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
 
@@ -30,11 +28,11 @@ const primary = [
   { href: "/director", label: "AI Film Director", icon: Sparkles },
   { href: "/characters", label: "Characters & Worlds", icon: Users2 },
   { href: "/storyboards", label: "Storyboard Studio", icon: Layers3 },
-  { href: "/production", label: "Production Queue", icon: Activity },
+  { href: "/production", label: "Production Queue", icon: Boxes },
 ];
 
 const create = [
-  { href: "/media", label: "Media Library", icon: Image },
+  { href: "/media", label: "Media Library", icon: ImageIcon },
   { href: "/editor", label: "Film Editor", icon: Clapperboard },
   { href: "/shorts", label: "Shorts Studio", icon: MonitorPlay },
   { href: "/audio", label: "Voice & Audio", icon: Mic2 },
@@ -73,8 +71,9 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
           href={item.href}
           onClick={() => setOpen(false)}
           className={`nav-link ${active ? "active" : ""}`}
+          aria-current={active ? "page" : undefined}
         >
-          <Icon size={16} />
+          <Icon size={16} strokeWidth={1.8} />
           <span>{item.label}</span>
         </Link>
       );
@@ -83,7 +82,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
   const allItems = [
     ...primary,
     ...create,
-    { href: "/settings", label: "Settings", icon: Settings2 },
+    { href: "/settings", label: "Settings & Connections", icon: Settings2 },
   ];
   const current = allItems.find(
     (item) => item.href === pathname || (item.href !== "/" && pathname.startsWith(item.href)),
@@ -92,37 +91,40 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${open ? "open" : ""}`}>
-        <div className="brand">
-          <div className="brand-mark"><Film size={20} /></div>
+        <Link className="brand" href="/" onClick={() => setOpen(false)} aria-label="NELLWICK Studio home">
+          <div className="brand-mark"><Film size={19} strokeWidth={1.9} /></div>
           <div>
             <div className="brand-name">NELLWICK</div>
             <div className="brand-sub">AI FILM STUDIO</div>
           </div>
-        </div>
+        </Link>
 
         <div>
           <div className="nav-label">WORKSPACE</div>
-          <nav className="nav-list">{renderLinks(primary)}</nav>
+          <nav className="nav-list" aria-label="Main workspace navigation">{renderLinks(primary)}</nav>
         </div>
 
         <div>
           <div className="nav-label">CREATIVE TOOLS</div>
-          <nav className="nav-list">{renderLinks(create)}</nav>
+          <nav className="nav-list" aria-label="Creative tools navigation">{renderLinks(create)}</nav>
         </div>
 
         <div className="sidebar-bottom">
           <div className="gpu-card">
             <div className="gpu-title">
               <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <Boxes size={14} /> Worker status
+                <Boxes size={14} /> GPU WORKSPACE
               </span>
-              <span className="pill">Standby</span>
+              <span className="pill">NOTEBOOK</span>
             </div>
             <div className="gpu-note">
-              Start a Colab or Kaggle notebook to process queued shots. Your studio stays available here.
+              Kaggle or Colab runs only while its notebook session is active. Open the production queue to review and process jobs.
             </div>
+            <Link href="/production" className="text-link" onClick={() => setOpen(false)}>
+              View production queue
+            </Link>
           </div>
-          <nav className="nav-list">
+          <nav className="nav-list" aria-label="Studio settings">
             {renderLinks([{ href: "/settings", label: "Settings & Connections", icon: Settings2 }])}
           </nav>
         </div>
@@ -143,24 +145,20 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
               className="icon-button mobile-menu"
               aria-label="Open navigation"
               onClick={() => setOpen(true)}
+              type="button"
             >
               <Menu size={17} />
             </button>
             <div className="breadcrumb">
-              STUDIO <span style={{ color: "#566176", margin: "0 8px" }}>/</span>
-              <span style={{ color: "#d7dced" }}>{current?.label || "Overview"}</span>
+              STUDIO <span style={{ color: "#69716e", margin: "0 8px" }}>/</span>
+              <span style={{ color: "#e0d9ca" }}>{current?.label || "Overview"}</span>
             </div>
           </div>
 
           <div className="top-actions">
-            <div className="search-box">
-              <Search size={14} />
-              <input placeholder="Search your studio" aria-label="Search your studio" />
-              <span style={{ fontSize: 9, border: "1px solid var(--line)", borderRadius: 4, padding: "2px 4px" }}>⌘ K</span>
-            </div>
-            <button className="icon-button" aria-label="Notifications" type="button">
-              <Bell size={15} />
-            </button>
+            <Link href="/projects" className="primary-btn topbar-create">
+              <Plus size={14} /><span>New project</span>
+            </Link>
             <button
               className="secondary-btn"
               type="button"

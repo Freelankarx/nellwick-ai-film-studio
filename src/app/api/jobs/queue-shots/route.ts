@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import type { Database } from "@/types/database";
+import type { Database, Json } from "@/types/database";
 
 type SelectedShot = Pick<Database["public"]["Tables"]["shots"]["Row"], "id" | "scene_id" | "shot_number" | "prompt" | "negative_prompt" | "duration_seconds" | "aspect_ratio" | "generation_mode" | "model_id" | "status" | "action_description" | "generation_settings">;
 type SelectedScene = Pick<Database["public"]["Tables"]["scenes"]["Row"], "id" | "scene_number" | "episode_id">;
@@ -70,11 +70,11 @@ export async function POST(request: Request) {
     aspect_ratio: shot.aspect_ratio,
     generation_mode: shot.generation_mode,
     model_id: shot.model_id,
-    source_asset_id: shot.generation_mode === "image_to_video" ? (shot.generation_settings as Record<string, unknown>).source_asset_id : null,
+    source_asset_id: shot.generation_mode === "image_to_video" ? String((shot.generation_settings as Record<string, unknown>).source_asset_id) : null,
     source_drive_file_id: shot.generation_mode === "image_to_video" ? sourceById.get(String((shot.generation_settings as Record<string, unknown>).source_asset_id))?.drive_file_id : null,
   }));
   const ratio = episode.aspect_ratio === "9:16" ? "9:16" : "16:9";
-  const manifest = {
+  const manifest: Json = {
     schema_version: "1.0.0",
     project: { id: project.id, name: project.name },
     episode: { id: episode.id, title: episode.title, aspect_ratio: ratio },

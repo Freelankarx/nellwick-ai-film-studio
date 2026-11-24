@@ -122,3 +122,15 @@ The worker has an experimental LTX-Video 0.9.6 distilled Diffusers adapter. It d
 - The Shorts workspace now has a Daily 3-Shorts Showrunner, queue progress and a saved script/shot-prompt library with copy actions.
 - This stage creates *creative blueprints*, not finished video files. The user still generates/approves the visual and voice assets and assembles them in Film Editor. Do not represent the planner as automatic finished-video production.
 - No schema migration required; it reuses the existing project/episode, production_jobs and episode production_manifest.
+
+
+## Stage 9 — Daily three-Shorts showrunner
+
+- Adds authenticated `/api/director/plan-shorts`, scoped to a project and one of its episodes.
+- The existing local Qwen planner receives the saved NELLWICK character bible, locations, product guidance, visual style and the user's brief.
+- It returns exactly three distinct vertical 9:16 blueprints, each 35–55 seconds, including title, opening hook, concept, script, cast, recurring location, optional product use, caption, thumbnail text, CTA and 4–7 continuous-action scene prompts with camera direction, dialogue/voiceover and sound-design notes.
+- The worker validates character, speaker, location and product references against the supplied project bible and adjusts scene durations to sum to the planned Short runtime.
+- The authenticated worker completion endpoint appends the blueprints to the selected episode's `production_manifest.short_blueprints` array. They survive refresh and can be copied from the Shorts workspace.
+- The Shorts workspace includes the daily planner, product-placement preference, queue progress and saved script/shot-prompt library.
+- This is a script and storyboard planner, not an automatic finished-video generator. Image/video assets and voices still need to be generated and edited as separate production jobs.
+- No SQL migration required; this reuses existing project/episode, production_jobs and production_manifest storage.

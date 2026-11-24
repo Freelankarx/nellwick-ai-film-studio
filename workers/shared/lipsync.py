@@ -77,7 +77,8 @@ def _ensure_environment(worker: Any, job_id: str) -> tuple[Path, Path, Path]:
         worker.update_progress(job_id, 5, "Installing isolated MuseTalk runtime (Python 3.10 / CUDA 11.8)")
         _run([
             "uv", "pip", "install", "--python", str(python),
-            "--index-url", "https://download.pytorch.org/whl/cu118",
+            "--index-url", "https://pypi.org/simple",
+            "--extra-index-url", "https://download.pytorch.org/whl/cu118",
             "torch==2.0.1+cu118", "torchvision==0.15.2+cu118",
         ], "Installing isolated CUDA PyTorch", timeout=1800)
 
@@ -250,7 +251,9 @@ def process_musetalk_lip_sync_job(worker: Any, job: dict[str, Any]) -> None:
     from PIL import Image
     normalized_portrait = work_dir / "character_portrait_normalized.png"
     with Image.open(portrait_path) as opened:
-        opened.convert("RGB").save(normalized_portrait, format="PNG", optimize=True)
+        portrait = opened.convert("RGB")
+        portrait.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
+        portrait.save(normalized_portrait, format="PNG", optimize=True)
     portrait_path = normalized_portrait
     duration = _audio_duration(audio_path)
     try:

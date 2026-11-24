@@ -2,12 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 
-const voiceIds = [
-  "af_heart", "af_bella", "af_sarah", "af_nicole",
-  "am_michael", "am_fenrir", "am_puck",
-  "bf_emma", "bf_isabella", "bm_george", "bm_lewis",
-] as const;
-
 const kokoroVoiceIds = new Set(["af_heart", "af_bella", "af_sarah", "af_nicole", "am_michael", "am_fenrir", "am_puck", "bf_emma", "bf_isabella", "bm_george", "bm_lewis"]);
 const edgeVoiceIds = new Set(["en-US-ChristopherNeural", "en-US-JennyNeural", "en-US-AnaNeural", "en-US-GuyNeural", "en-US-SteffanNeural"]);
 

@@ -5,3 +5,4 @@ safetensors
 sentencepiece
 imageio-ffmpeg
 requests
+Pillow>=10

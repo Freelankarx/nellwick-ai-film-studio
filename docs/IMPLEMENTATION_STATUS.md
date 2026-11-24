@@ -60,3 +60,15 @@ This document separates implemented workspace workflows from model/rendering cap
 - [ ] Auth/session tests, CRUD tests, production queue tests, worker processing, Drive registration and rendered-output tests remain to be run against the live services.
 
 A page displaying a working control is not considered complete until its operation has been verified against the live service. Do not treat edit plans as rendered videos or asset management as generated audio.
+
+
+## Reference image generation batch (24 November 2026)
+
+- [x] Added project-scoped reference image jobs for saved characters and locations.
+- [x] Added SDXL Base 1.0 FP16 worker adapter with model CPU offload, VAE slicing/tiling, progress updates, cancellation checkpoints and Google Drive PNG uploads.
+- [x] Generated image assets are registered in the project Media Library and can be selected in the character/location reference picker.
+- [x] Server validates that target records belong to the selected project and account.
+- [ ] Benchmark SDXL load, peak VRAM, image quality, generation time and upload on the actual Kaggle T4 session.
+- [ ] Review generated references and confirm that the browser can display Drive thumbnails under the user's Google session.
+
+**Important:** implementation is not the same as a successful GPU benchmark. Do not treat SDXL reference generation as production-verified until the live notebook test passes and the owner approves the output.

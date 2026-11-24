@@ -88,3 +88,14 @@ Sources:
 ## Current implementation boundary
 
 The Python worker now supports Qwen3 story/shot planning and Wan 2.1 T2V 1.3B text-to-video. The Qwen adapters still require live Kaggle/Colab GPU validation. CogVideoX, SDXL, Kokoro, and LTX entries are researched/catalogued candidates, not implemented adapters. The UI has reserved modules for script planning, storyboards, character continuity, editing, Shorts and audio, but the first delivered codebase does not claim those modules are finished. Implement and benchmark each adapter separately.
+
+
+## SDXL reference-image adapter (24 November 2026)
+
+**Selected still-image baseline:** Stable Diffusion XL Base 1.0 (`stabilityai/stable-diffusion-xl-base-1.0`).
+
+- Task: text-to-image reference sheets for characters and environments. It is not an image-to-video model and does not guarantee identity consistency between separate generations.
+- Initial output sizes: 1024×1024, 1024×576 and 576×1024.
+- Runtime: FP16 Diffusers pipeline with model CPU offload, VAE slicing and tiling. The worker requires at least 12 GiB total VRAM for this adapter and uses one GPU; two T4 cards are not treated as one pooled 32 GiB device.
+- Hugging Face Diffusers documentation recommends CPU offload for SDXL memory pressure. See https://huggingface.co/docs/diffusers/using-diffusers/sdxl
+- Status: code path implemented; no live Kaggle T4 image-quality or memory benchmark completed as of this record. The first real output must be reviewed before enabling routine use.

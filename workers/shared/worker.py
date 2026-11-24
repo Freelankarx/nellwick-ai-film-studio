@@ -820,22 +820,6 @@ class NELLWICKWorker:
             from render import process_short_render_job
             process_short_render_job(self, job)
             return
-        if task == "episode_render":
-            self.unload_ltx()
-            self.unload_wan()
-            self.unload_qwen()
-            self.unload_sdxl()
-            from render import process_episode_render_job
-            process_episode_render_job(self, job)
-            return
-        if task == "short_render":
-            self.unload_ltx()
-            self.unload_wan()
-            self.unload_qwen()
-            self.unload_sdxl()
-            from render import process_short_render_job
-            process_short_render_job(self, job)
-            return
         if task in ("story_plan", "shot_plan"):
             self.unload_ltx()
             # A previous video job in the same notebook session may leave Wan allocated.

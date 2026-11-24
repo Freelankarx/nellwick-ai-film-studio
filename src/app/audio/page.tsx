@@ -237,7 +237,7 @@ export default function AudioPage() {
         </div>
         <div className="form-grid" style={{ marginTop: 14, gridTemplateColumns: "1fr 1fr" }}>
           <label className="field-label">Speech engine
-            <select className="field" value={engine} onChange={(event) => { const next = event.target.value as AudioEngine; setEngine(next); setVoiceId(next === "edge-tts" ? "en-US-JennyNeural" : "af_heart"); }}>
+            <select className="field" value={engine} disabled={lines.length > 0} onChange={(event) => { const next = event.target.value as AudioEngine; setEngine(next); setVoiceId(next === "edge-tts" ? "en-US-JennyNeural" : "af_heart"); }}>
               <option value="kokoro">Kokoro 82M · local / offline</option>
               <option value="edge-tts">Microsoft Edge TTS · online / optional</option>
             </select>

@@ -132,6 +132,19 @@
       "recommended_configuration": "2B DiT with 0.6B or 1.7B language model; CPU offload/quantization according to official GPU compatibility guide",
       "python_requirement": ">=3.11,<3.13",
       "caveat": "Official install documentation requires Python 3.11–3.12. Current Kaggle worker runtime observed by the user is Python 3.13, so this requires a separate Python 3.12 environment and a live T4/P100 benchmark before integration."
+    },
+    {
+      "id": "ltx-video-0.9.6-i2v",
+      "name": "LTX-Video 0.9.6 distilled · experimental image-to-video",
+      "task": "image_to_video",
+      "repository": "Lightricks/LTX-Video-0.9.6-distilled",
+      "license": "LTX-Video 0.9.6 model-specific Lightricks licence; review before commercial publishing",
+      "status": "experimental_worker_adapter_requires_live_T4_benchmark",
+      "reference_resolution": "704x480 landscape; 480x704 portrait; 576x576 square",
+      "recommended_clip_length_seconds": "2-5",
+      "precision": "FP16 path for T4 testing; upstream recommends BF16 for many variants",
+      "hardware_policy": "Single GPU with at least 12 GiB total VRAM and CPU offload; no multi-GPU VRAM aggregation",
+      "caveat": "Adapter is connected to storyboard source-image selection and the production queue, but actual model loading, FP16 support, VRAM peak, generation quality and T4/P100 runtime remain unverified. Experimental; not a production guarantee."
     }
   ]
 }

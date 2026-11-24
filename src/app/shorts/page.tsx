@@ -120,6 +120,38 @@ export default function ShortsPage() {
   }, [episodeId, episode?.id, episode?.production_manifest]);
 
   useEffect(() => {
+    if (!planningJobId) return;
+    let active = true;
+    let checking = false;
+    const check = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const response = await fetch("/api/jobs", { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not check Shorts planning status.");
+        const job = (data.jobs || []).find((item: { id: string }) => item.id === planningJobId);
+        if (!active || !job) return;
+        setPlanningStatus(job.status);
+        setPlanningProgress(Number(job.progress || 0));
+        if (job.status === "completed") {
+          setPlanningJobId("");
+          await loadEpisodes(projectId);
+          setNotice("Three original NELLWICK Shorts have been saved to this episode's script library.");
+        } else if (job.status === "failed" || job.status === "cancelled") {
+          setPlanningJobId("");
+          setError(job.last_error || "Shorts planning did not complete. Check Production.");
+        }
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : "Could not check Shorts planning status.");
+      } finally { checking = false; }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [planningJobId, projectId, loadEpisodes]);
+
+  useEffect(() => {
     if (!renderJobId) return;
     let active = true;
     let checking = false;
@@ -150,6 +182,46 @@ export default function ShortsPage() {
     const timer = window.setInterval(() => void check(), 5000);
     return () => { active = false; window.clearInterval(timer); };
   }, [renderJobId, projectId, loadAssets]);
+
+  async function generateThreeShorts() {
+    if (!projectId || !episodeId) { setError("Choose a project and episode first."); return; }
+    if (shortsPrompt.trim().length < 20) { setError("Describe the Shorts you want in at least 20 characters."); return; }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/director/plan-shorts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, episodeId, prompt: shortsPrompt.trim(), productFocus }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not queue the Shorts planner.");
+      setPlanningJobId(data.job.id);
+      setPlanningStatus("queued");
+      setPlanningProgress(0);
+      setNotice("Three Shorts are queued for the local Qwen showrunner. Keep your Kaggle worker running.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not queue the Shorts planner.");
+    } finally { setBusy(false); }
+  }
+
+  async function copyShortScript(short: ShortBlueprint) {
+    try {
+      await navigator.clipboard.writeText(short.script_markdown);
+      setNotice("Copied the script for " + short.title + ".");
+    } catch {
+      setError("Clipboard access was unavailable. Select and copy the script from the blueprint card.");
+    }
+  }
+
+  async function copyShortPrompts(short: ShortBlueprint) {
+    const promptText = short.scenes.map((scene) => "SCENE " + scene.scene_number + " (" + scene.duration_seconds + "s)\n" + scene.shot_prompt).join("\n\n");
+    try {
+      await navigator.clipboard.writeText(promptText);
+      setNotice("Copied all vertical scene prompts for " + short.title + ".");
+    } catch {
+      setError("Clipboard access was unavailable. Select and copy the scene prompts from the blueprint card.");
+    }
+  }
 
   function addPlan() {
     if (!assetId) { setError("Choose a source video first."); return; }

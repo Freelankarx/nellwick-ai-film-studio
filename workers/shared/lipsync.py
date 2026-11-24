@@ -284,6 +284,11 @@ def process_musetalk_lip_sync_job(worker: Any, job: dict[str, Any]) -> None:
     results_dir = work_dir / "results"
     output_path = results_dir / "v15" / "nellwick_talking_character.mp4"
     worker.update_progress(job_id, 48, "Running MuseTalk 1.5 FP16 lip-sync inference")
+    ffmpeg_bin_dir = work_dir / "bin"
+    ffmpeg_bin_dir.mkdir(parents=True, exist_ok=True)
+    ffmpeg_link = ffmpeg_bin_dir / "ffmpeg"
+    if not ffmpeg_link.exists():
+        ffmpeg_link.symlink_to(Path(ffmpeg))
     command = [
         str(python), "-m", "scripts.inference",
         "--inference_config", str(config),
@@ -295,16 +300,11 @@ def process_musetalk_lip_sync_job(worker: Any, job: dict[str, Any]) -> None:
         "--fps", "25",
         "--batch_size", "4",
         "--use_float16",
-        "--ffmpeg_path", str(Path(ffmpeg).parent),
+        "--ffmpeg_path", str(ffmpeg_bin_dir),
     ]
     inference_env = os.environ.copy()
     inference_env["CUDA_VISIBLE_DEVICES"] = "0"
     inference_env["OMP_NUM_THREADS"] = "2"
-    ffmpeg_bin_dir = work_dir / "bin"
-    ffmpeg_bin_dir.mkdir(parents=True, exist_ok=True)
-    ffmpeg_link = ffmpeg_bin_dir / "ffmpeg"
-    if not ffmpeg_link.exists():
-        ffmpeg_link.symlink_to(Path(ffmpeg))
     try:
         _run(command, "Generating lip-synchronised character clip", cwd=repo_dir,
              timeout=max(900, int(duration * 300)), env=inference_env)

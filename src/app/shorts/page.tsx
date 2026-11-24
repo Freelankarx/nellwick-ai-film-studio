@@ -286,7 +286,82 @@ export default function ShortsPage() {
       </div>
       {!projects.length && <p className="muted">Create a project first. <Link className="text-link" href="/projects">Open projects</Link></p>}
     </section>
-    {episodeId && <div className="content-grid" style={{ alignItems: "start" }}>
+    {episodeId && <>
+      <section className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-heading">
+          <div>
+            <div className="panel-title">Daily 3-Shorts showrunner</div>
+            <div className="panel-subtitle">One brief becomes three different 35–55 second vertical story blueprints grounded in your NELLWICK cast and brand bible.</div>
+          </div>
+          <span className="pill">Local Qwen · 9:16</span>
+        </div>
+        <label className="field-label" style={{ display: "block", marginTop: 12 }}>What should today's three Shorts be about?
+          <textarea className="field" rows={3} maxLength={2500} value={shortsPrompt} onChange={(event) => setShortsPrompt(event.target.value)} placeholder="Example: Create three different emotional mystery moments involving Grace, Daniel and Milo. One can include a natural pet-care moment, but keep the stories entertaining rather than promotional."/>
+        </label>
+        <div className="form-grid" style={{ gridTemplateColumns: "1fr auto", alignItems: "end", marginTop: 10 }}>
+          <label className="field-label">Product placement
+            <select className="field" value={productFocus} onChange={(event) => setProductFocus(event.target.value as typeof productFocus)}>
+              <option value="natural">Natural only · no forced product placement</option>
+              <option value="grooming_brush">Include grooming brush when relevant</option>
+              <option value="hair_glove">Include hair-removal glove when relevant</option>
+              <option value="none">No products in these Shorts</option>
+            </select>
+          </label>
+          <button className="primary-btn" onClick={() => void generateThreeShorts()} disabled={busy || !!planningJobId || !episodeId || shortsPrompt.trim().length < 20}>
+            <Clapperboard size={14}/>{busy ? "Queueing…" : "Generate 3 Shorts"}
+          </button>
+        </div>
+        <p className="muted" style={{ marginTop: 8 }}>This creates scripts and shot-by-shot visual prompts, not finished videos. Generate the voice and visuals next, then assemble the assets in the Film Editor.</p>
+        {planningJobId && <div className="panel" style={{ marginTop: 12 }}>
+          <div className="panel-heading">
+            <div><div className="panel-title">Shorts planning · {planningStatus}</div><div className="panel-subtitle">{planningProgress}% · three blueprints</div></div>
+            <span className="pill">{planningStatus}</span>
+          </div>
+          <div style={{ height: 7, background: "var(--line)", borderRadius: 99, overflow: "hidden", marginTop: 10 }}>
+            <div style={{ width: planningProgress + "%", height: "100%", background: "var(--accent)" }}/>
+          </div>
+        </div>}
+      </section>
+
+      {blueprints.length > 0 && <section className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-heading">
+          <div><div className="panel-title">NELLWICK Shorts script library</div><div className="panel-subtitle">{blueprints.length} saved concepts for this episode · newest first</div></div>
+          <span className="pill">Script-ready</span>
+        </div>
+        <div className="form-grid">
+          {[...blueprints].reverse().map((short) => <article className="panel" key={short.id}>
+            <div className="eyebrow">{short.duration_seconds}s · 9:16 · {short.characters.join(", ") || "Narrator"}</div>
+            <div className="panel-title" style={{ marginTop: 6 }}>{short.title}</div>
+            <div className="panel-subtitle" style={{ marginTop: 6 }}>HOOK: {short.hook}</div>
+            <p style={{ marginTop: 10 }}>{short.concept}</p>
+            <p className="muted" style={{ marginTop: 8 }}>{short.location_name}{short.product_used ? " · " + short.product_used : ""}</p>
+            <details style={{ marginTop: 10 }}>
+              <summary className="text-link">Read full script</summary>
+              <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, marginTop: 8 }}>{short.script_markdown}</pre>
+            </details>
+            <details style={{ marginTop: 8 }}>
+              <summary className="text-link">Shot-by-shot prompts ({short.scenes.length})</summary>
+              <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
+                {short.scenes.map((scene) => <div key={scene.scene_number}>
+                  <strong>Scene {scene.scene_number} · {scene.duration_seconds}s</strong>
+                  <p className="muted">{scene.visual_description}</p>
+                  <p>{scene.shot_prompt}</p>
+                  {scene.dialogue.map((line, index) => <p className="muted" key={index}>{line.speaker}: “{line.text}”</p>)}
+                  {scene.sound_design && <p className="muted">Sound: {scene.sound_design}</p>}
+                </div>)}
+              </div>
+            </details>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+              <button className="secondary-btn" onClick={() => void copyShortScript(short)}><Save size={13}/>Copy script</button>
+              <button className="secondary-btn" onClick={() => void copyShortPrompts(short)}><Video size={13}/>Copy shot prompts</button>
+            </div>
+            <p className="muted" style={{ marginTop: 8 }}>Caption: {short.caption}</p>
+            {short.thumbnail_text && <p className="muted">Thumbnail text: {short.thumbnail_text}</p>}
+          </article>)}
+        </div>
+      </section>}
+
+      <div className="content-grid" style={{ alignItems: "start" }}>
       <section className="panel">
         <div className="panel-title">Create a vertical cut</div>
         <div className="form-grid" style={{ marginTop: 14 }}>
@@ -309,7 +384,8 @@ export default function ShortsPage() {
         </div>)}</div> : <div className="empty-card"><div className="empty-title">No Short plans</div><p className="empty-copy">Choose a source video and add the first vertical cut.</p></div>}
         {renderJobId && <div className="panel" style={{ marginTop: 12 }}><div className="panel-title">Rendering Short · {renderStatus} · {renderProgress}%</div><div style={{ height: 7, background: "var(--line)", borderRadius: 99, overflow: "hidden", marginTop: 10 }}><div style={{ width: renderProgress + "%", height: "100%", background: "var(--accent)" }}/></div></div>}
       </section>
-    </div>}
+      </div>
+    </>}
     <div className="notice" style={{ marginTop: 16 }}>The current Short renderer uses a centered 9:16 crop and retains the source video&apos;s audio. Face-aware auto-reframing, subtitle styling, music beds and automatic hook selection remain future improvements.</div>
     <Link className="text-link" href="/production">Open production queue</Link>
   </div>;

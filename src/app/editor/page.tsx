@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, AudioLines, Film, Image as ImageIcon, Music2, Plus, RefreshCw, Save, Trash2, Volume2 } from "lucide-react";
+import { ArrowDown, ArrowUp, AudioLines, Film, Image as ImageIcon, Music2, Plus, Save, Trash2, Volume2 } from "lucide-react";
 import { PageHeading } from "@/components/ui";
-import { formatBytes, formatDate } from "@/lib/utils";
+import { formatBytes } from "@/lib/utils";
 
 type Project = { id: string; name: string };
 type Episode = { id: string; title: string; aspect_ratio: string; production_manifest: Record<string, unknown> | null };
@@ -99,7 +99,7 @@ export default function EditorPage() {
     setClips(saved.clips);
     setAudioTracks(saved.audioTracks);
     setSubtitleAssetId(saved.subtitleAssetId);
-  }, [episodeId, selectedEpisode?.id]);
+  }, [episodeId, selectedEpisode?.id, selectedEpisode?.production_manifest]);
 
   useEffect(() => {
     if (!renderJobId) return;
@@ -318,7 +318,7 @@ export default function EditorPage() {
           <div className="panel-heading"><div><div className="panel-title">Episode render status</div><div className="panel-subtitle">{renderStatus} · {renderProgress}%</div></div><span className="pill">{renderStatus}</span></div>
           <div style={{ height: 7, background: "var(--line)", borderRadius: 99, overflow: "hidden", marginTop: 12 }}><div style={{ width: renderProgress + "%", height: "100%", background: "var(--accent)", transition: "width .25s" }}/></div>
         </div>}
-        <p className="muted" style={{ marginTop: 10 }}>Output follows the episode aspect ratio. The current renderer uses hard cuts and center crops; transitions, face-aware vertical reframing and colour grading are future improvements. Still images receive a subtle Ken Burns move. All clips and assets are fetched from this project's connected Google Drive.</p>
+        <p className="muted" style={{ marginTop: 10 }}>Output follows the episode aspect ratio. The current renderer uses hard cuts and center crops; transitions, face-aware vertical reframing and colour grading are future improvements. Still images receive a subtle Ken Burns move. All clips and assets are fetched from this project&apos;s connected Google Drive.</p>
         <Link className="text-link" href="/production">Open production queue</Link>
       </section>
     </>}

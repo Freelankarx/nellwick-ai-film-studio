@@ -365,6 +365,21 @@ export default function CharactersPage() {
                     onChange={setCharacterReferences}
                     title="Character reference images"
                     description="Attach approved portraits, turnarounds, expressions, wardrobe and pose references."
+                    aspectRatio="1:1"
+                    generationTarget={editingCharacter ? {
+                      type: "character",
+                      id: editingCharacter,
+                      name: characterForm.name,
+                      prompt: [
+                        "Create a premium cinematic character turnaround reference sheet for one fictional character.",
+                        "Show the exact same person in three clear full-body views: front view, side profile and back view, aligned on one clean studio canvas.",
+                        "Keep the face, hairstyle, body proportions and clothing identical in all three views. Neutral light grey studio background, even soft lighting, realistic human anatomy, detailed natural skin texture, crisp costume details.",
+                        "No text, no labels, no typography, no watermark, no logos, no extra people.",
+                        "Character identity: " + characterForm.canonical_description,
+                        "Age range: " + characterForm.age_range + ". Skin tone: " + characterForm.skin_tone + ". Hair: " + characterForm.hair + ". Eyes: " + characterForm.eyes + ". Build: " + characterForm.build + ". Facial features: " + characterForm.facial_features + ". Signature details: " + characterForm.signature_details + ".",
+                        "Wardrobe: " + characterForm.wardrobe.split(/\\r?\\n/).filter(Boolean).join("; ") + ". Colour palette: " + characterForm.colour_palette + ".",
+                      ].filter(Boolean).join(" ")
+                    } : undefined}
                   />
 
                   <label className="field-label">Continuity rules<textarea className="field" rows={3} value={characterForm.continuity_notes} onChange={(event) => setCharacterForm((v) => ({ ...v, continuity_notes: event.target.value }))} maxLength={4000} placeholder="Details that must not change between shots: hairstyle, outfit, accessories, body proportions…"/></label>
@@ -418,6 +433,20 @@ export default function CharactersPage() {
                     onChange={setLocationReferences}
                     title="Location reference images"
                     description="Attach environment photos, set designs, lighting references or approved backgrounds."
+                    aspectRatio="16:9"
+                    generationTarget={editingLocation ? {
+                      type: "location",
+                      id: editingLocation,
+                      name: locationForm.name,
+                      prompt: [
+                        "Create a high-end cinematic production-design environment reference for a fictional film location.",
+                        "Show one clear wide establishing view with no people, no text, no labels, no watermark and no logos.",
+                        "Believable architecture, coherent spatial layout, detailed materials, motivated cinematic lighting, rich but natural textures, film production concept art with realistic photographic detail.",
+                        "Location: " + locationForm.name + ".",
+                        "Environment description: " + locationForm.description,
+                        "Continuity requirements: " + locationForm.continuity_notes,
+                      ].filter(Boolean).join(" ")
+                    } : undefined}
                   />
                   <label className="field-label">Environment continuity rules<textarea className="field" rows={3} value={locationForm.continuity_notes} onChange={(event) => setLocationForm((v) => ({ ...v, continuity_notes: event.target.value }))} maxLength={4000} placeholder="Keep the window position, furniture, wall colours, time of day and lighting consistent…"/></label>
                   <div className="continuity-form-actions">

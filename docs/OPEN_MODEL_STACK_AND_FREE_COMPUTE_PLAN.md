@@ -134,3 +134,15 @@ The worker has an experimental LTX-Video 0.9.6 distilled Diffusers adapter. It d
 - The Shorts workspace includes the daily planner, product-placement preference, queue progress and saved script/shot-prompt library.
 - This is a script and storyboard planner, not an automatic finished-video generator. Image/video assets and voices still need to be generated and edited as separate production jobs.
 - No SQL migration required; this reuses existing project/episode, production_jobs and production_manifest storage.
+
+
+## Stage 10 — promote Shorts blueprints into independent 9:16 storyboards
+
+- Adds an authenticated `/api/director/promote-short` endpoint.
+- The endpoint reads a saved Short blueprint from the source episode manifest and creates a separate episode with `aspect_ratio = 9:16`, preserving the source long-form episode.
+- Creates scene rows from each Short scene plan, including visual summaries, dialogue/voiceover excerpts, location linkage and sound-design continuity notes.
+- Splits each 3–15 second scene into one or more compatible 2–5 second shot rows for the current Wan 2.1 text-to-video adapter. Camera metadata, source blueprint ID and segment indexes are retained.
+- Marks the source blueprint as promoted and links its new episode ID; duplicate promotions are rejected.
+- The Shorts library now offers `Create 9:16 storyboard` and then opens the created episode in Storyboard Studio.
+- No SQL migration required; this uses existing episode, scene, shot and episode production-manifest fields.
+- This generates an editable storyboard and video prompts, not finished MP4s. The user still reviews shots and queues generation through the existing production worker.

@@ -205,11 +205,20 @@ def process_edge_tts_audio_job(worker: Any, job: dict[str, Any]) -> None:
         generated = asyncio.run(generate_all())
         import imageio_ffmpeg
         ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        silence_path = work_dir / "dialogue_pause.mp3"
+        silence_run = subprocess.run([
+            ffmpeg, "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+            "-t", "0.38", "-c:a", "libmp3lame", "-q:a", "9", str(silence_path),
+        ], capture_output=True, text=True, timeout=120)
+        if silence_run.returncode != 0 or not silence_path.exists():
+            raise RuntimeError("Could not create the short pause between dialogue lines: " + (silence_run.stderr or "")[-800:])
         concat_file = work_dir / "audio_concat.txt"
-        concat_file.write_text(
-            "\n".join("file '" + str(path.resolve()).replace("'", r"'\''") + "'" for path, _, _ in generated) + "\n",
-            encoding="utf-8",
-        )
+        concat_entries = []
+        for index, (path, _, _) in enumerate(generated):
+            concat_entries.append("file '" + str(path.resolve()).replace("'", r"'\\''") + "'")
+            if index < len(generated) - 1:
+                concat_entries.append("file '" + str(silence_path.resolve()).replace("'", r"'\\''") + "'")
+        concat_file.write_text("\n".join(concat_entries) + "\n", encoding="utf-8")
         combined_path = work_dir / "nellwick_edge_dialogue.mp3"
         worker.update_progress(job_id, 76, "Assembling combined dialogue and word-timed subtitles")
         run = subprocess.run([
@@ -244,7 +253,7 @@ def process_edge_tts_audio_job(worker: Any, job: dict[str, Any]) -> None:
                     "text": segment["text"], "speed": segment["speed"], "duration_seconds": round(duration, 3),
                 },
             })
-            cumulative += duration + 0.38
+            cumulative += duration + (0.38 if index < len(generated) else 0.0)
 
             if srt.strip():
                 line_srt_path = audio_path.with_suffix(".srt")

@@ -100,7 +100,38 @@
       "task": "text_to_speech",
       "repository": "hexgrad/Kokoro-82M",
       "license": "Apache-2.0",
-      "status": "voice_generation_candidate"
+      "status": "implemented_worker_adapter_requires_live_kaggle_quality_and_runtime_benchmark",
+      "languages": [
+        "American English",
+        "British English"
+      ],
+      "voices": [
+        "af_heart",
+        "af_bella",
+        "af_sarah",
+        "af_nicole",
+        "am_michael",
+        "am_fenrir",
+        "am_puck",
+        "bf_emma",
+        "bf_isabella",
+        "bm_george",
+        "bm_lewis"
+      ],
+      "output": "PCM 16-bit WAV at 24000 Hz; individual dialogue lines plus combined dialogue track",
+      "caveat": "Local TTS only; uses preset voices and does not clone a character or actor voice. Output quality, speed and repeated-job stability need a live Kaggle benchmark. First use downloads weights from Hugging Face Hub; no hosted inference endpoint is called."
+    },
+    {
+      "id": "ace-step-1.5-music",
+      "name": "ACE-Step 1.5",
+      "task": "music_generation",
+      "repository": "ACE-Step/acestep-v15-sft",
+      "license": "MIT",
+      "status": "research_candidate_not_integrated",
+      "recommended_gpu_vram_gb": "8-16",
+      "recommended_configuration": "2B DiT with 0.6B or 1.7B language model; CPU offload/quantization according to official GPU compatibility guide",
+      "python_requirement": ">=3.11,<3.13",
+      "caveat": "Official install documentation requires Python 3.11–3.12. Current Kaggle worker runtime observed by the user is Python 3.13, so this requires a separate Python 3.12 environment and a live T4/P100 benchmark before integration."
     }
   ]
 }

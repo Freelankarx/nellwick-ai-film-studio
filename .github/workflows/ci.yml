@@ -16,5 +16,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
-      - name: Compile notebook worker
-        run: python3 -m py_compile workers/shared/worker.py
+      - name: Compile notebook worker and audio adapter
+        run: python3 -m py_compile workers/shared/worker.py workers/shared/audio.py
+      - name: Test audio job manifest validation
+        working-directory: workers/shared
+        run: python3 -m unittest -v test_audio.py

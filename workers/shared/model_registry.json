@@ -145,6 +145,27 @@
       "precision": "FP16 path for T4 testing; upstream recommends BF16 for many variants",
       "hardware_policy": "Single GPU with at least 12 GiB total VRAM and CPU offload; no multi-GPU VRAM aggregation",
       "caveat": "Adapter is connected to storyboard source-image selection and the production queue, but actual model loading, FP16 support, VRAM peak, generation quality and T4/P100 runtime remain unverified. Experimental; not a production guarantee."
+    },
+    {
+      "id": "edge-tts-online-optional",
+      "name": "Microsoft Edge TTS (optional online voice service)",
+      "task": "text_to_speech",
+      "repository": "rany2/edge-tts",
+      "license": "Unofficial client library; service and voice use governed by Microsoft's applicable service terms",
+      "status": "implemented_optional_online_adapter_may_be_throttled",
+      "output": "MP3 dialogue lines, combined MP3 track, individual SRT and combined word-boundary SRT",
+      "caveat": "Requires internet access from Kaggle/Colab and communicates with a Microsoft-hosted service. No API key is needed by this client, but this is not a contractual unlimited-use service, SLA or guaranteed commercial endpoint. Prefer local Kokoro if the service is unavailable or not approved for the use."
+    },
+    {
+      "id": "ffmpeg-episode-renderer",
+      "name": "NELLWICK low-memory FFmpeg renderer",
+      "task": "episode_render_and_short_render",
+      "repository": "FFmpeg",
+      "license": "FFmpeg build is LGPL or GPL depending on enabled components; check the exact distributed build configuration",
+      "status": "implemented_worker_queue_adapter_requires_live_output_benchmark",
+      "output": "H.264/AAC MP4 episode masters, 9:16 vertical MP4 Shorts, optional burned SRT subtitles",
+      "hardware_policy": "Runs sequentially on CPU with two threads; source media downloaded from Drive; rendered segments checkpointed to Drive.",
+      "caveat": "Current output uses hard cuts, center crop, basic Ken Burns still motion and simple audio mixing. Face-aware reframing, advanced transitions, colour grading, Foley, music/SFX generation and lip-sync are not implemented."
     }
   ]
 }

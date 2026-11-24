@@ -19,12 +19,13 @@ This is the private production stack used only for NELLWICK ORIGINALS. It is not
 | Video generation | Wan 2.1 T2V 1.3B | Existing basic text-to-video fallback, not a quality ceiling and not image-to-video. |
 | Image-to-video candidate | CogVideoX 5B I2V | Candidate only. Official model card documents a low-VRAM quantised Diffusers path; benchmark runtime, temporal stability and visual quality before production. |
 | Larger text+image video | Wan 2.2 TI2V 5B | Not in the T4 baseline; documented 720p configuration requires substantially more memory. |
-| Audio music | ACE-Step 1.5 | Research candidate, not integrated. Validate exact checkpoint/weight licence and low-VRAM latency; code licence is not the model-weight licence. |
+| Audio music | ACE-Step 1.5 | Best current local music candidate. The official ACE-Step 1.5 SFT model card declares MIT weights; the official install docs support 8–16 GB VRAM with a 0.6B/1.7B language model and CPU offload. Not integrated yet. The current Kaggle Python 3.13 runtime is outside ACE-Step's declared Python 3.11–3.12 range, so use a separately tested Python 3.12 worker environment or defer integration. |
 | Sound effects | Procedural sound design and specifically licensed local assets | Do not assume every online sound library is commercially reusable. |
 | Editing/rendering | FFmpeg | Existing local clip assembly; expand to multi-track audio, transitions, captions, reframing and Shorts exports. |
 
 ## Models deliberately not in the free baseline
 
+- AudioLDM 2 is excluded for monetized NELLWICK output because its Hugging Face model card declares CC-BY-NC-SA-4.0 (non-commercial). Use ACE-Step for music and original/procedural or clearly commercial-use assets for sound effects.
 - LTX-2.5 is high-end, not a T4/P100 target; published minimum requirements start at 32 GB VRAM, with A100/H100 recommended. Model weights have a separate community licence from Apache-2.0 code.
 - HunyuanVideo 1.5 lists a 14 GB minimum with model offloading, close to the capacity of one 16 GB T4 and leaving little headroom. It also has a model-specific community licence and distribution conditions.
 - Two T4 cards are not one combined 29 GB GPU. Multi-GPU inference requires explicit parallel implementation.

@@ -345,7 +345,7 @@ return (
       </section>
 
       {projectId && brandProducts.length > 0 && <section className="panel" style={{ marginBottom: 16 }}>
-        <div className="panel-heading"><div><div className="panel-title">NELLWICK product vault</div><div className="panel-subtitle">Stored with this project's brand bible. Use real product photos/specifications as the visual and factual source of truth.</div></div><span className="pill">{brandProducts.length} products</span></div>
+        <div className="panel-heading"><div><div className="panel-title">NELLWICK product vault</div><div className="panel-subtitle">Stored with this project&apos;s brand bible. Use real product photos/specifications as the visual and factual source of truth.</div></div><span className="pill">{brandProducts.length} products</span></div>
         <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
           {brandProducts.map((product) => <article className="panel" key={product.id}>
             <div className="panel-title">{product.name}</div>

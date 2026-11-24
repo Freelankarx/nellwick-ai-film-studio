@@ -295,7 +295,7 @@ export default function ShortsPage() {
           </div>
           <span className="pill">Local Qwen · 9:16</span>
         </div>
-        <label className="field-label" style={{ display: "block", marginTop: 12 }}>What should today's three Shorts be about?
+        <label className="field-label" style={{ display: "block", marginTop: 12 }}>What should today&apos;s three Shorts be about?
           <textarea className="field" rows={3} maxLength={2500} value={shortsPrompt} onChange={(event) => setShortsPrompt(event.target.value)} placeholder="Example: Create three different emotional mystery moments involving Grace, Daniel and Milo. One can include a natural pet-care moment, but keep the stories entertaining rather than promotional."/>
         </label>
         <div className="form-grid" style={{ gridTemplateColumns: "1fr auto", alignItems: "end", marginTop: 10 }}>

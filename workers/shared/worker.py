@@ -820,6 +820,14 @@ class NELLWICKWorker:
             from render import process_short_render_job
             process_short_render_job(self, job)
             return
+        if task == "lip_sync":
+            self.unload_ltx()
+            self.unload_wan()
+            self.unload_qwen()
+            self.unload_sdxl()
+            from lipsync import process_musetalk_lip_sync_job
+            process_musetalk_lip_sync_job(self, job)
+            return
         if task in ("story_plan", "shot_plan"):
             self.unload_ltx()
             # A previous video job in the same notebook session may leave Wan allocated.

@@ -166,6 +166,20 @@
       "output": "H.264/AAC MP4 episode masters, 9:16 vertical MP4 Shorts, optional burned SRT subtitles",
       "hardware_policy": "Runs sequentially on CPU with two threads; source media downloaded from Drive; rendered segments checkpointed to Drive.",
       "caveat": "Current output uses hard cuts, center crop, basic Ken Burns still motion and simple audio mixing. Face-aware reframing, advanced transitions, colour grading, Foley, music/SFX generation and lip-sync are not implemented."
+    },
+    {
+      "id": "musetalk-1.5-lipsync",
+      "name": "MuseTalk 1.5",
+      "task": "talking_character_lip_sync",
+      "repository": "TMElyralab/MuseTalk",
+      "license": "MIT code and model weights; NOTICE asks users to contact the HDTF dataset owner about commercialization of the training data. Review the full NOTICE and all third-party component terms before monetized publishing.",
+      "status": "experimental_worker_adapter_requires_isolated_python310_cuda_and_live_t4_benchmark",
+      "input": "One approved project character portrait plus one dialogue/narration audio asset",
+      "output": "25 fps talking-character MP4 with generated lip motion and supplied audio",
+      "hardware_policy": "Separate Python 3.10 environment with PyTorch 2.0.1 CUDA 11.8, MMCV 2.0.1, MMPose 1.1.0 and FP16 inference. Uses one GPU only; designed to test on a single 16 GB T4/P100. No multi-GPU aggregation.",
+      "runtime_note": "First job clones repository, installs an isolated environment and downloads approximately 4 GB of model/support weights into Kaggle working storage. Reuse is possible during the same notebook session; a fresh Kaggle session may need to recreate/download them.",
+      "limitations": "Talking portrait / face-mouth animation only. Does not animate body movement, cannot guarantee exact identity preservation, and can introduce face jitter or alter facial details. English dialogue/narration expected. Current worker limit is 0.8–60 seconds per shot.",
+      "caveat": "No actual Kaggle T4 render has been verified yet. The official MuseTalk NOTICE flags a potential HDTF dataset commercialization issue; don't use its output for monetized publishing until that licensing question is cleared."
     }
   ]
 }

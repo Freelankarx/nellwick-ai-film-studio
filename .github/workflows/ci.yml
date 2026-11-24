@@ -17,7 +17,7 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - name: Compile notebook worker and audio adapter
-        run: python3 -m py_compile workers/shared/worker.py workers/shared/audio.py workers/shared/render.py
+        run: python3 -m py_compile workers/shared/worker.py workers/shared/audio.py workers/shared/render.py workers/shared/lipsync.py
       - name: Test audio job manifest validation
         working-directory: workers/shared
         run: python3 -m unittest -v test_audio.py
@@ -25,3 +25,7 @@ jobs:
       - name: Test render and subtitle helpers
         working-directory: workers/shared
         run: python3 -m unittest -v test_render.py
+
+      - name: Test MuseTalk lip-sync helper validation
+        working-directory: workers/shared
+        run: python3 -m unittest -v test_lipsync.py

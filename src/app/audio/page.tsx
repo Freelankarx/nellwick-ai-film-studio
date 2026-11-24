@@ -10,9 +10,10 @@ import { formatBytes, formatDate } from "@/lib/utils";
 type Project = { id: string; name: string };
 type Episode = { id: string; title: string };
 type AudioAsset = { id: string; name: string; mime_type: string | null; file_size: number | null; drive_file_id: string | null; created_at: string; source_type: string };
+type ReferenceAsset = { id: string; name: string; mime_type: string | null; drive_file_id: string | null };
 type VoiceLine = { id: string; speaker: string; voiceId: string; text: string; speed: number };
 type AudioEngine = "kokoro" | "edge-tts";
-type CastVoice = { id: string; name: string; voice_profile?: Record<string, string> | null };
+type CastVoice = { id: string; name: string; voice_profile?: Record<string, string> | null; reference_asset_ids?: string[] | null };
 
 const KOKORO_VOICES = [
   { id: "af_heart", label: "Heart · American female" },
@@ -38,6 +39,7 @@ const EDGE_VOICES = [
 
 export default function AudioPage() {
   const [assets, setAssets] = useState<AudioAsset[]>([]);
+  const [referenceAssets, setReferenceAssets] = useState<ReferenceAsset[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [cast, setCast] = useState<CastVoice[]>([]);
@@ -46,7 +48,6 @@ export default function AudioPage() {
   const [speaker, setSpeaker] = useState("Narrator");
   const [engine, setEngine] = useState<AudioEngine>("kokoro");
   const [voiceId, setVoiceId] = useState("af_heart");
-  const voices = engine === "edge-tts" ? EDGE_VOICES : KOKORO_VOICES;
   const [text, setText] = useState("");
   const [speed, setSpeed] = useState(1);
   const [lines, setLines] = useState<VoiceLine[]>([]);
@@ -57,12 +58,27 @@ export default function AudioPage() {
   const [jobProgress, setJobProgress] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [lipSyncCharacterId, setLipSyncCharacterId] = useState("");
+  const [lipSyncPortraitId, setLipSyncPortraitId] = useState("");
+  const [lipSyncAudioId, setLipSyncAudioId] = useState("");
+  const [lipSyncJobId, setLipSyncJobId] = useState("");
+  const [lipSyncStatus, setLipSyncStatus] = useState("");
+  const [lipSyncProgress, setLipSyncProgress] = useState(0);
 
-  const loadAssets = useCallback(async () => {
-    const response = await fetch("/api/assets", { cache: "no-store" });
+  const voices = engine === "edge-tts" ? EDGE_VOICES : KOKORO_VOICES;
+  const lipSyncCharacter = cast.find((item) => item.id === lipSyncCharacterId);
+  const lipSyncPortraits = lipSyncCharacterId
+    ? referenceAssets.filter((asset) => (lipSyncCharacter?.reference_asset_ids || []).includes(asset.id))
+    : referenceAssets;
+
+  const loadAssets = useCallback(async (project?: string) => {
+    const path = project ? "/api/assets?projectId=" + encodeURIComponent(project) : "/api/assets";
+    const response = await fetch(path, { cache: "no-store" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load audio assets.");
-    setAssets((data.assets || []).filter((asset: AudioAsset) => asset.mime_type?.startsWith("audio/")));
+    const allAssets: AudioAsset[] = data.assets || [];
+    setAssets(allAssets.filter((asset) => asset.mime_type?.startsWith("audio/")));
+    setReferenceAssets(allAssets.filter((asset) => asset.mime_type?.startsWith("image/") && asset.drive_file_id));
   }, []);
 
   const loadProjects = useCallback(async () => {
@@ -89,7 +105,8 @@ export default function AudioPage() {
   }, [loadAssets, loadProjects]);
 
   useEffect(() => {
-    if (!projectId) { setEpisodes([]); setEpisodeId(""); return; }
+    if (!projectId) { setEpisodes([]); setEpisodeId(""); setReferenceAssets([]); return; }
+    void loadAssets(projectId).catch((caught) => setError(caught instanceof Error ? caught.message : "Could not load project assets."));
     let active = true;
     fetch("/api/projects/" + projectId, { cache: "no-store" })
       .then(async (response) => {
@@ -135,7 +152,7 @@ export default function AudioPage() {
         if (job.status === "completed") {
           setJobId("");
           setNotice("Generated dialogue audio, the combined track and any word-timed subtitle files have been added to your project Media Library.");
-          await loadAssets();
+          await loadAssets(projectId);
         } else if (job.status === "failed" || job.status === "cancelled") {
           setJobId("");
           setError(job.last_error || "Voice generation did not complete. Review the Production queue.");
@@ -149,7 +166,39 @@ export default function AudioPage() {
     void check();
     const timer = window.setInterval(() => void check(), 5000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [jobId, loadAssets]);
+  }, [jobId, loadAssets, projectId]);
+
+  useEffect(() => {
+    if (!lipSyncJobId) return;
+    let active = true;
+    let checking = false;
+    const check = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const response = await fetch("/api/jobs", { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not check talking-character job status.");
+        const job = (data.jobs || []).find((item: { id: string }) => item.id === lipSyncJobId);
+        if (!active || !job) return;
+        setLipSyncStatus(job.status);
+        setLipSyncProgress(Number(job.progress || 0));
+        if (job.status === "completed") {
+          setLipSyncJobId("");
+          setNotice("Talking-character clip is ready in the project Media Library.");
+          await loadAssets(projectId);
+        } else if (job.status === "failed" || job.status === "cancelled") {
+          setLipSyncJobId("");
+          setError(job.last_error || "MuseTalk lip-sync did not complete. Review the Production queue and Kaggle worker output.");
+        }
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : "Could not check talking-character job.");
+      } finally { checking = false; }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [lipSyncJobId, projectId, loadAssets]);
 
   function useSavedCharacterVoice() {
     const character = cast.find((item) => item.name.trim().toLowerCase() === speaker.trim().toLowerCase());
@@ -174,6 +223,34 @@ export default function AudioPage() {
     setLines((current) => [...current, { id: crypto.randomUUID(), speaker: speaker.trim(), voiceId, text: cleanText, speed }]);
     setText("");
     setNotice("Dialogue line added to this voice session.");
+  }
+
+  async function queueLipSync() {
+    if (!projectId) { setError("Select a project first."); return; }
+    if (!lipSyncPortraitId) { setError("Choose an approved character portrait."); return; }
+    if (!lipSyncAudioId) { setError("Choose a generated dialogue audio file."); return; }
+    if (lipSyncCharacterId && !(lipSyncCharacter?.reference_asset_ids || []).includes(lipSyncPortraitId)) {
+      setError("Attach this portrait to the character's approved reference images first.");
+      return;
+    }
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/jobs/lipsync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId, episodeId: episodeId || null,
+          characterId: lipSyncCharacterId || null,
+          portraitAssetId: lipSyncPortraitId, audioAssetId: lipSyncAudioId,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not queue talking-character generation.");
+      setLipSyncJobId(data.job.id); setLipSyncStatus("queued"); setLipSyncProgress(0);
+      setNotice("MuseTalk talking-character job queued. The first run installs a separate Python 3.10 runtime and downloads model weights; keep Kaggle running.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not queue talking-character generation.");
+    } finally { setBusy(false); }
   }
 
   async function queueGeneration() {
@@ -208,8 +285,8 @@ export default function AudioPage() {
       title="Voice & audio"
       subtitle="Generate character dialogue and narration with optional online Edge voices or local Kokoro, then manage the audio and subtitle files stored in your connected Google Drive."
       action={<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button className="secondary-btn" onClick={() => void loadAssets()}><RefreshCw size={14}/>Refresh</button>
-        <UploadMediaButton onUploaded={() => void loadAssets()}/>
+        <button className="secondary-btn" onClick={() => void loadAssets(projectId)}><RefreshCw size={14}/>Refresh</button>
+        <UploadMediaButton onUploaded={() => void loadAssets(projectId)}/>
       </div>}
     />
 
@@ -262,7 +339,7 @@ export default function AudioPage() {
         </label>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
           <button className="secondary-btn" onClick={addLine}><Plus size={14}/>Add line to session</button>
-          <button className="primary-btn" onClick={() => void queueGeneration()} disabled={busy || !!jobId}>
+          <button className="primary-btn" onClick={() => void queueGeneration()} disabled={busy || !!jobId || !!lipSyncJobId}>
             <Volume2 size={14}/>{busy ? "Queueing…" : "Generate dialogue audio"}
           </button>
         </div>
@@ -285,6 +362,55 @@ export default function AudioPage() {
 
     {error && <div className="notice" style={{ marginBottom: 12 }}>{error}</div>}
     {notice && <div className="notice" style={{ marginBottom: 12 }}>{notice}</div>}
+
+    <section className="panel" style={{ marginBottom: 18 }}>
+      <div className="panel-heading">
+        <div><div className="panel-title">Talking-character lip-sync · Experimental</div><div className="panel-subtitle">Animate the mouth of an approved portrait from a dialogue or narration track.</div></div>
+        <span className="pill">MuseTalk 1.5 · Kaggle GPU</span>
+      </div>
+      <div className="notice" style={{ marginTop: 12 }}>
+        Use one clear, front-facing portrait and a short English dialogue line (maximum 60 seconds). This creates a talking close-up from one still image. It does not animate the character&apos;s body or guarantee perfect identity preservation. The first job installs a separate Python 3.10 environment and downloads several model weights; later jobs in the same Kaggle session can reuse them. Review MuseTalk&apos;s training-data commercialisation notice before using generated output in monetized publishing.
+      </div>
+      <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 14 }}>
+        <label className="field-label">Character (optional)
+          <select className="field" value={lipSyncCharacterId} onChange={(event) => {
+            const nextId = event.target.value;
+            setLipSyncCharacterId(nextId);
+            const item = cast.find((entry) => entry.id === nextId);
+            const firstRef = item?.reference_asset_ids?.find((id) => referenceAssets.some((asset) => asset.id === id)) || "";
+            setLipSyncPortraitId(firstRef);
+          }}>
+            <option value="">Unassigned portrait</option>
+            {cast.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="field-label">Approved portrait image
+          <select className="field" value={lipSyncPortraitId} onChange={(event) => setLipSyncPortraitId(event.target.value)}>
+            <option value="">Select a reference image</option>
+            {lipSyncPortraits.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
+          </select>
+          <span className="muted">{lipSyncPortraits.length} project images available. Attach character references in Characters & Worlds.</span>
+        </label>
+        <label className="field-label">Dialogue / narration audio
+          <select className="field" value={lipSyncAudioId} onChange={(event) => setLipSyncAudioId(event.target.value)}>
+            <option value="">Select an audio track</option>
+            {assets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
+          </select>
+        </label>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <button className="primary-btn" onClick={() => void queueLipSync()} disabled={busy || !!jobId || !!lipSyncJobId || !referenceAssets.length || !assets.length}>
+          <Volume2 size={14}/>{busy ? "Queueing…" : "Generate talking-character clip"}
+        </button>
+        <Link className="secondary-btn" href="/characters">Manage approved character references</Link>
+      </div>
+      {lipSyncJobId && <div className="panel" style={{ marginTop: 14 }}>
+        <div className="panel-heading"><div><div className="panel-title">MuseTalk job · {lipSyncStatus}</div><div className="panel-subtitle">{lipSyncProgress}% complete</div></div><span className="pill">{lipSyncStatus}</span></div>
+        <div style={{ height: 7, background: "var(--line)", borderRadius: 99, overflow: "hidden", marginTop: 12 }}>
+          <div style={{ width: lipSyncProgress + "%", height: "100%", background: "var(--accent)", transition: "width .25s" }}/>
+        </div>
+      </div>}
+    </section>
 
     <section className="panel">
       <div className="panel-heading"><div><div className="panel-title">Generated and uploaded audio</div><div className="panel-subtitle">Individual character lines and combined dialogue tracks.</div></div><span className="pill">{assets.length} files</span></div>

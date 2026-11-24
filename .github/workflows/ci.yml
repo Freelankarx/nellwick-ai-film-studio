@@ -17,7 +17,11 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - name: Compile notebook worker and audio adapter
-        run: python3 -m py_compile workers/shared/worker.py workers/shared/audio.py
+        run: python3 -m py_compile workers/shared/worker.py workers/shared/audio.py workers/shared/render.py
       - name: Test audio job manifest validation
         working-directory: workers/shared
         run: python3 -m unittest -v test_audio.py
+
+      - name: Test render and subtitle helpers
+        working-directory: workers/shared
+        run: python3 -m unittest -v test_render.py

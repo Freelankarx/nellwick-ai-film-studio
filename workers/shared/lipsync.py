@@ -300,6 +300,11 @@ def process_musetalk_lip_sync_job(worker: Any, job: dict[str, Any]) -> None:
     inference_env = os.environ.copy()
     inference_env["CUDA_VISIBLE_DEVICES"] = "0"
     inference_env["OMP_NUM_THREADS"] = "2"
+    ffmpeg_bin_dir = work_dir / "bin"
+    ffmpeg_bin_dir.mkdir(parents=True, exist_ok=True)
+    ffmpeg_link = ffmpeg_bin_dir / "ffmpeg"
+    if not ffmpeg_link.exists():
+        ffmpeg_link.symlink_to(Path(ffmpeg))
     try:
         _run(command, "Generating lip-synchronised character clip", cwd=repo_dir,
              timeout=max(900, int(duration * 300)), env=inference_env)

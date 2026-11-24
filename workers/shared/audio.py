@@ -304,21 +304,22 @@ def process_edge_tts_audio_job(worker: Any, job: dict[str, Any]) -> None:
 
 
 def process_kokoro_audio_job(worker: Any, job: dict[str, Any]) -> None:
-    """Generate line WAVs and a combined dialogue track, then register them in the Studio."""
+    """Dispatch local Kokoro or optional online Edge TTS for this audio job."""
+    manifest = job.get("manifest") or {}
+    if manifest.get("engine", "kokoro") == "edge-tts":
+        process_edge_tts_audio_job(worker, job)
+        return
+
     import numpy as np
     import soundfile as sf
     import torch
     from kokoro import KPipeline
 
     job_id = job["id"]
-    manifest = job.get("manifest") or {}
     project = manifest.get("project") or {}
     episode = manifest.get("episode") or {}
     project_name = str(project.get("name") or "NELLWICK Project")
     episode_title = str(episode.get("title") or "Voice Session")
-    if manifest.get("engine", "kokoro") == "edge-tts":
-        process_edge_tts_audio_job(worker, job)
-        return
     segments = normalise_segments(manifest.get("segments"))
 
     worker.unload_wan()

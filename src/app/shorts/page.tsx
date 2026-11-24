@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Clapperboard, Plus, RefreshCw, Save, Trash2, Video } from "lucide-react";
 import { PageHeading } from "@/components/ui";
 
@@ -23,6 +24,8 @@ type ShortBlueprint = {
   caption: string;
   thumbnail_text: string;
   cta: string;
+  promoted_episode_id?: string;
+  storyboard_shot_count?: number;
   scenes: {
     scene_number: number;
     duration_seconds: number;
@@ -52,6 +55,7 @@ function readBlueprints(value: unknown): ShortBlueprint[] {
 }
 
 export default function ShortsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -67,6 +71,7 @@ export default function ShortsPage() {
   const [planningJobId, setPlanningJobId] = useState("");
   const [planningStatus, setPlanningStatus] = useState("");
   const [planningProgress, setPlanningProgress] = useState(0);
+  const [promotingShortId, setPromotingShortId] = useState("");
   const [plans, setPlans] = useState<ShortPlan[]>([]);
   const [busy, setBusy] = useState(false);
   const [renderJobId, setRenderJobId] = useState("");
@@ -202,6 +207,37 @@ export default function ShortsPage() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not queue the Shorts planner.");
     } finally { setBusy(false); }
+  }
+
+  async function promoteShortToStoryboard(short: ShortBlueprint) {
+    if (!episodeId || !projectId) return;
+    if (short.promoted_episode_id) {
+      router.push("/storyboards?projectId=" + encodeURIComponent(projectId) + "&episodeId=" + encodeURIComponent(short.promoted_episode_id));
+      return;
+    }
+    setPromotingShortId(short.id);
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/director/promote-short", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episodeId, shortId: short.id }),
+      });
+      const data = await response.json();
+      if (!response.ok && !data.already_promoted) throw new Error(data.error || "Could not create a 9:16 storyboard.");
+      const promotedId = data.episode?.id || data.episode_id;
+      if (!promotedId) throw new Error("The storyboard was created, but its episode ID was not returned.");
+      setBlueprints((current) => current.map((item) => item.id === short.id
+        ? { ...item, promoted_episode_id: promotedId, storyboard_shot_count: data.shot_count ?? item.storyboard_shot_count }
+        : item));
+      setNotice("Created a separate 9:16 episode with " + (data.scene_count || short.scenes.length) + " scenes and " + (data.shot_count || "its") + " storyboard shots.");
+      router.push("/storyboards?projectId=" + encodeURIComponent(projectId) + "&episodeId=" + encodeURIComponent(promotedId));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not promote this Short.");
+    } finally {
+      setBusy(false);
+      setPromotingShortId("");
+    }
   }
 
   async function copyShortScript(short: ShortBlueprint) {
@@ -354,9 +390,13 @@ export default function ShortsPage() {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
               <button className="secondary-btn" onClick={() => void copyShortScript(short)}><Save size={13}/>Copy script</button>
               <button className="secondary-btn" onClick={() => void copyShortPrompts(short)}><Video size={13}/>Copy shot prompts</button>
+              <button className="primary-btn" onClick={() => void promoteShortToStoryboard(short)} disabled={busy}>
+                <Clapperboard size={13}/>{promotingShortId === short.id ? "Creating…" : short.promoted_episode_id ? "Open storyboard" : "Create 9:16 storyboard"}
+              </button>
             </div>
             <p className="muted" style={{ marginTop: 8 }}>Caption: {short.caption}</p>
             {short.thumbnail_text && <p className="muted">Thumbnail text: {short.thumbnail_text}</p>}
+            {short.promoted_episode_id && <p className="muted">Storyboard created · {short.storyboard_shot_count || short.scenes.length} shots</p>}
           </article>)}
         </div>
       </section>}

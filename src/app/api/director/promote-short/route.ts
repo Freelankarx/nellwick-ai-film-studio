@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import type { Json } from "@/types/database";
+import type { Database, Json } from "@/types/database";
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -125,7 +125,8 @@ export async function POST(request: Request) {
   }
 
   const sceneIds = new Map(createdScenes.map((scene) => [scene.scene_number, scene.id]));
-  const shotRows: Record<string, unknown>[] = [];
+  type ShotInsert = Database["public"]["Tables"]["shots"]["Insert"];
+  const shotRows: ShotInsert[] = [];
   for (const scene of plan.scenes) {
     const sceneId = sceneIds.get(scene.scene_number);
     if (!sceneId) continue;

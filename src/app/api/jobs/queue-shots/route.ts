@@ -69,7 +69,9 @@ export async function POST(request: Request) {
     duration_seconds: Number(shot.duration_seconds),
     aspect_ratio: shot.aspect_ratio,
     generation_mode: shot.generation_mode,
-    model_id: shot.model_id,\n    source_asset_id: shot.generation_mode === "image_to_video" ? (shot.generation_settings as Record<string, unknown>).source_asset_id : null,\n    source_drive_file_id: shot.generation_mode === "image_to_video" ? sourceById.get(String((shot.generation_settings as Record<string, unknown>).source_asset_id))?.drive_file_id : null,
+    model_id: shot.model_id,
+    source_asset_id: shot.generation_mode === "image_to_video" ? (shot.generation_settings as Record<string, unknown>).source_asset_id : null,
+    source_drive_file_id: shot.generation_mode === "image_to_video" ? sourceById.get(String((shot.generation_settings as Record<string, unknown>).source_asset_id))?.drive_file_id : null,
   }));
   const ratio = episode.aspect_ratio === "9:16" ? "9:16" : "16:9";
   const manifest = {
@@ -77,7 +79,8 @@ export async function POST(request: Request) {
     project: { id: project.id, name: project.name },
     episode: { id: episode.id, title: episode.title, aspect_ratio: ratio },
     settings: {
-      model_id: "wan21-t2v-1.3b",\n      image_to_video_model_id: "ltx-video-0.9.6-i2v",
+      model_id: "wan21-t2v-1.3b",
+      image_to_video_model_id: "ltx-video-0.9.6-i2v",
       fps: 16,
       width: ratio === "9:16" ? 480 : 832,
       height: ratio === "9:16" ? 832 : 480,

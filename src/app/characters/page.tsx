@@ -221,7 +221,7 @@ export default function CharactersPage() {
       canonical_description: characterForm.canonical_description.trim(),
       visual_traits,
       wardrobe: characterForm.wardrobe.split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
-      voice_profile: characterForm.voice.trim() ? { notes: characterForm.voice.trim() } : {},
+      voice_profile: { ...(editingCharacter ? (characters.find((item) => item.id === editingCharacter)?.voice_profile || {}) : {}), ...(characterForm.voice.trim() ? { notes: characterForm.voice.trim() } : {}) },
       reference_asset_ids: characterReferences,
       continuity_notes: characterForm.continuity_notes.trim(),
     };

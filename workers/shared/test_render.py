@@ -1,5 +1,6 @@
 import unittest
-from render import _safe_name, _shift_srt, _srt_timestamp
+from render import _safe_name
+from audio import _shift_srt, _srt_timestamp
 
 
 class RenderHelperTests(unittest.TestCase):
